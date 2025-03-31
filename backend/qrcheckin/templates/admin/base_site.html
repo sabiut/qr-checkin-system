@@ -1,0 +1,206 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block title %}{{ title }} | {{ site_title|default:_('QR Check-in Admin') }}{% endblock %}
+
+{% block branding %}
+<h1 id="site-name">
+    <a href="{% url 'admin:index' %}">
+        QR Check-in System Administration
+    </a>
+</h1>
+{% endblock %}
+
+{% block extrastyle %}
+{{ block.super }}
+<style>
+    :root {
+        --primary: #4f46e5;
+        --secondary: #6366f1;
+        --accent: #818cf8;
+        --primary-fg: #fff;
+        --body-fg: #374151;
+        --body-bg: #f9fafb;
+        --header-color: var(--primary);
+        --header-branding-color: var(--primary-fg);
+        --header-link-color: #efefef;
+        --header-link-color-hover: var(--primary-fg);
+        
+        /* Form colors */
+        --button-bg: var(--primary);
+        --button-hover-bg: #4338ca;
+        --link-fg: #4f46e5;
+        --link-hover-fg: #4338ca;
+    }
+    
+    /* Custom dashboard styling */
+    .dashboard .module table td a {
+        color: var(--primary);
+        font-weight: 500;
+    }
+    
+    .dashboard .module table {
+        border: 1px solid #e0e0e0;
+        border-radius: 4px;
+    }
+    
+    .dashboard .module h2, 
+    .app-qrcheckin h2 {
+        color: var(--primary);
+        font-size: 18px;
+        padding: 12px 16px;
+        margin: 0;
+        background: #f9f9f9;
+        border-radius: 4px 4px 0 0;
+        border-bottom: 1px solid #e0e0e0;
+    }
+    
+    /* Statistics table */
+    .app-qrcheckin .module {
+        border: 1px solid #e0e0e0;
+        border-radius: 4px;
+        overflow: hidden;
+    }
+    
+    .app-qrcheckin table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    
+    .app-qrcheckin table th {
+        text-align: left;
+        padding: 12px 16px;
+        background: #f2f2f2;
+        border-bottom: 1px solid #e0e0e0;
+    }
+    
+    .app-qrcheckin table td {
+        padding: 10px 16px;
+        border-bottom: 1px solid #eee;
+    }
+    
+    .app-qrcheckin table tr:last-child td {
+        border-bottom: none;
+    }
+    
+    /* Improved general styling */
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        line-height: 1.5;
+    }
+    
+    /* Card-like appearance for modules */
+    .dashboard .module {
+        border-radius: 8px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        margin-bottom: 20px;
+        border: none;
+    }
+    
+    /* Form styling */
+    .form-row {
+        padding: 12px 0;
+    }
+    
+    .aligned label {
+        color: #4b5563;
+        font-weight: 500;
+    }
+    
+    input[type=text], 
+    input[type=password], 
+    input[type=email], 
+    input[type=url], 
+    input[type=number], 
+    input[type=tel], 
+    textarea, 
+    select, 
+    .vTextField {
+        border: 1px solid #d1d5db;
+        border-radius: 6px;
+        padding: 8px 12px;
+        transition: border-color 0.15s ease-in-out;
+    }
+    
+    input[type=text]:focus, 
+    input[type=password]:focus, 
+    input[type=email]:focus, 
+    input[type=url]:focus, 
+    input[type=number]:focus, 
+    input[type=tel]:focus, 
+    textarea:focus, 
+    select:focus, 
+    .vTextField:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+    }
+    
+    /* Button styling */
+    .button, 
+    input[type=submit], 
+    input[type=button], 
+    .submit-row input, 
+    a.button {
+        border-radius: 6px;
+        font-weight: 500;
+        transition: background-color 0.15s ease-in-out;
+    }
+    
+    /* Table styling */
+    #changelist table {
+        border-radius: 8px;
+        overflow: hidden;
+        border: 1px solid #e5e7eb;
+    }
+    
+    #changelist table thead th {
+        background: #f3f4f6;
+        padding: 12px 8px;
+        font-weight: 600;
+    }
+    
+    #changelist table tbody tr:hover {
+        background-color: #f9fafb;
+    }
+    
+    /* Pagination */
+    .paginator {
+        margin: 20px 0;
+        font-size: 14px;
+    }
+    
+    .paginator a:link, 
+    .paginator a:visited {
+        padding: 6px 12px;
+        background: white;
+        border: 1px solid #d1d5db;
+        border-radius: 4px;
+        margin: 0 4px;
+    }
+    
+    .paginator a:hover {
+        background: #f3f4f6;
+    }
+    
+    /* Header styling */
+    #header {
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    
+    /* Improved form layout */
+    .inline-group {
+        border-radius: 8px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        overflow: hidden;
+        border: 1px solid #e5e7eb;
+        margin-bottom: 20px;
+    }
+    
+    .inline-group h2 {
+        background: #f3f4f6;
+        padding: 12px 16px;
+        font-size: 16px;
+        color: #374151;
+    }
+</style>
+{% endblock %}

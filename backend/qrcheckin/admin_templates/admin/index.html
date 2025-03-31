@@ -1,0 +1,38 @@
+{% extends "admin/index.html" %}
+{% load i18n %}
+
+{% block content %}
+<div class="app-qrcheckin module">
+    <h2>QR Check-in System Statistics</h2>
+    <div class="module" style="margin-bottom: 20px; padding: 10px;">
+        <table>
+            <thead>
+                <tr>
+                    <th>Category</th>
+                    <th>Count</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Total Events</td>
+                    <td>{{ event_count }}</td>
+                </tr>
+                <tr>
+                    <td>Upcoming Events</td>
+                    <td>{{ upcoming_events }}</td>
+                </tr>
+                <tr>
+                    <td>Total Invitations</td>
+                    <td>{{ invitation_count }}</td>
+                </tr>
+                <tr>
+                    <td>Checked-in Attendees</td>
+                    <td>{{ checked_in_count }}</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{{ block.super }}
+{% endblock %}

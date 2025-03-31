@@ -1,87 +1,81 @@
-# Welcome to React Router!
+# QR Code Check-in System
 
-A modern, production-ready template for building full-stack React applications using React Router.
-
-[![Open in StackBlitz](https://developer.stackblitz.com/img/open_in_stackblitz.svg)](https://stackblitz.com/github/remix-run/react-router-templates/tree/main/default)
+An automated check-in system that scans QR codes from invitations and marks guests as attending. The system can create invitations with QR codes and works in environments with limited internet connectivity.
 
 ## Features
 
-- 🚀 Server-side rendering
-- ⚡️ Hot Module Replacement (HMR)
-- 📦 Asset bundling and optimization
-- 🔄 Data loading and mutations
-- 🔒 TypeScript by default
-- 🎉 TailwindCSS for styling
-- 📖 [React Router docs](https://reactrouter.com/)
+- Create and manage events
+- Generate invitations with unique QR codes
+- Scan QR codes for check-in
+- Mark attendance status
+- Offline capability for limited connectivity environments
+- Guest management
+
+## Tech Stack
+
+- **Frontend**: React with TypeScript
+- **Backend**: Django REST Framework
+- **Database**: PostgreSQL
+- **Containerization**: Docker & Docker Compose
+- **QR Code**: html5-qrcode
+
+## Project Structure
+
+```
+qr-checkin-system/
+├── frontend/             # React frontend app
+│   ├── ...
+├── backend/              # Django backend api
+│   ├── ...
+├── docker-compose.yml    # Docker compose configuration
+├── .env                  # Environment variables
+├── README.md             # Documentation
+```
 
 ## Getting Started
 
-### Installation
+### Prerequisites
 
-Install the dependencies:
+- Docker and Docker Compose
+- Node.js and npm (for local development)
+- Python (for local development)
+
+### Running with Docker
 
 ```bash
+# Clone the repository
+git clone <repository-url>
+cd qr-checkin-system
+
+# Start the application
+docker-compose up -d
+
+# Access the application
+# Frontend: http://localhost:3000
+# Backend API: http://localhost:8000
+```
+
+### Local Development
+
+```bash
+# Frontend
+cd frontend
 npm install
-```
-
-### Development
-
-Start the development server with HMR:
-
-```bash
 npm run dev
+
+# Backend
+cd backend
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+pip install -r requirements.txt
+python manage.py migrate
+python manage.py runserver
 ```
 
-Your application will be available at `http://localhost:5173`.
+## Offline Capabilities
 
-## Building for Production
+The system is designed to work with limited internet connectivity:
 
-Create a production build:
-
-```bash
-npm run build
-```
-
-## Deployment
-
-### Docker Deployment
-
-To build and run using Docker:
-
-```bash
-docker build -t my-app .
-
-# Run the container
-docker run -p 3000:3000 my-app
-```
-
-The containerized application can be deployed to any platform that supports Docker, including:
-
-- AWS ECS
-- Google Cloud Run
-- Azure Container Apps
-- Digital Ocean App Platform
-- Fly.io
-- Railway
-
-### DIY Deployment
-
-If you're familiar with deploying Node applications, the built-in app server is production-ready.
-
-Make sure to deploy the output of `npm run build`
-
-```
-├── package.json
-├── package-lock.json (or pnpm-lock.yaml, or bun.lockb)
-├── build/
-│   ├── client/    # Static assets
-│   └── server/    # Server-side code
-```
-
-## Styling
-
-This template comes with [Tailwind CSS](https://tailwindcss.com/) already configured for a simple default starting experience. You can use whatever CSS framework you prefer.
-
----
-
-Built with ❤️ using React Router.
+- Frontend uses service workers for offline capabilities
+- Backend can operate in offline mode, syncing when connectivity is restored
+- Local storage for temporary data storage
