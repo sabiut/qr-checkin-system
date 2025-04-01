@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Event Ticket - {{ event.name }}</title>
+    <style>
+        @page {
+            size: 8.5in 11in;
+            margin: 0.5in;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            color: #333;
+            background-color: #f9f9f9;
+        }
+        .ticket {
+            width: 100%;
+            max-width: 800px;
+            margin: 0 auto;
+            border: 1px solid #e1e1e1;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            background-color: white;
+        }
+        .ticket-header {
+            background: linear-gradient(135deg, #4f46e5, #3730a3);
+            color: white;
+            padding: 30px 20px;
+            text-align: center;
+            position: relative;
+        }
+        .ticket-header h1 {
+            margin: 0;
+            font-size: 28px;
+            letter-spacing: -0.5px;
+        }
+        .ticket-header h2 {
+            margin: 10px 0 0 0;
+            font-weight: 400;
+            opacity: 0.9;
+            font-size: 20px;
+        }
+        .ticket-body {
+            padding: 30px;
+        }
+        .event-details, .guest-details {
+            margin-bottom: 30px;
+            padding: 20px;
+            background-color: #f8f9ff;
+            border-radius: 8px;
+        }
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-top: 0;
+            margin-bottom: 15px;
+            color: #4f46e5;
+            border-bottom: 2px solid #e6e8ff;
+            padding-bottom: 8px;
+        }
+        .qr-code {
+            text-align: center;
+            margin: 30px 0;
+            padding: 25px;
+            background-color: white;
+            border: 1px dashed #ccc;
+            border-radius: 8px;
+        }
+        .qr-code img {
+            max-width: 180px;
+            height: auto;
+            display: block;
+            margin: 0 auto;
+            border: 10px solid white;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+        }
+        .qr-code p {
+            margin-top: 15px;
+            font-size: 14px;
+            color: #666;
+        }
+        .ticket-footer {
+            background-color: #f5f5f5;
+            padding: 20px;
+            text-align: center;
+            font-size: 0.8em;
+            color: #666;
+            border-top: 1px solid #eee;
+        }
+        .event-property {
+            display: flex;
+            margin-bottom: 12px;
+        }
+        .property-label {
+            font-weight: 600;
+            min-width: 120px;
+            color: #555;
+        }
+        .property-value {
+            flex: 1;
+        }
+        .ticket-id {
+            font-size: 0.8em;
+            text-align: right;
+            color: #999;
+            margin-top: 15px;
+            font-family: monospace;
+        }
+        .ticket-date {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background-color: rgba(255, 255, 255, 0.2);
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 14px;
+        }
+        @media print {
+            body {
+                background-color: white;
+            }
+            .ticket {
+                box-shadow: none;
+                border: 1px solid #ddd;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="ticket">
+        <div class="ticket-header">
+            <div class="ticket-date">{{ event.date }}</div>
+            <h1>{{ event.name }}</h1>
+            <h2>Admission Ticket</h2>
+        </div>
+        <div class="ticket-body">
+            <div class="guest-details">
+                <h3 class="section-title">Guest Information</h3>
+                <div class="event-property">
+                    <span class="property-label">Name:</span>
+                    <span class="property-value">{{ invitation.guest_name }}</span>
+                </div>
+                {% if invitation.guest_email %}
+                <div class="event-property">
+                    <span class="property-label">Email:</span>
+                    <span class="property-value">{{ invitation.guest_email }}</span>
+                </div>
+                {% endif %}
+                {% if invitation.guest_phone %}
+                <div class="event-property">
+                    <span class="property-label">Phone:</span>
+                    <span class="property-value">{{ invitation.guest_phone }}</span>
+                </div>
+                {% endif %}
+            </div>
+            
+            <div class="event-details">
+                <h3 class="section-title">Event Details</h3>
+                <div class="event-property">
+                    <span class="property-label">Date:</span>
+                    <span class="property-value">{{ event.date }}</span>
+                </div>
+                <div class="event-property">
+                    <span class="property-label">Time:</span>
+                    <span class="property-value">{{ event.time }}</span>
+                </div>
+                <div class="event-property">
+                    <span class="property-label">Location:</span>
+                    <span class="property-value">{{ event.location }}</span>
+                </div>
+                {% if event.description %}
+                <div class="event-property">
+                    <span class="property-label">Description:</span>
+                    <span class="property-value">{{ event.description }}</span>
+                </div>
+                {% endif %}
+            </div>
+            
+            <div class="qr-code">
+                <h3 class="section-title">Check-in Code</h3>
+                {% if qr_code_url %}
+                <img src="{{ qr_code_url }}" alt="Check-in QR Code">
+                {% else %}
+                <p>(QR code will be available after saving)</p>
+                {% endif %}
+                <p>Please present this QR code when you arrive at the event for check-in.</p>
+            </div>
+            
+            <div class="ticket-id">
+                Ticket ID: {{ invitation.id }}
+            </div>
+        </div>
+        <div class="ticket-footer">
+            <p>This ticket is personalized and non-transferrable.</p>
+            <p>Generated by QR Check-in System</p>
+        </div>
+    </div>
+</body>
+</html>

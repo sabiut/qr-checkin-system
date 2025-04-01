@@ -6,10 +6,21 @@ An automated check-in system that scans QR codes from invitations and marks gues
 
 - Create and manage events
 - Generate invitations with unique QR codes
+- Generate personalized digital tickets with embedded QR codes
+- Email delivery of tickets to attendees
 - Scan QR codes for check-in
 - Mark attendance status
 - Offline capability for limited connectivity environments
 - Guest management
+
+## Ticket System
+
+The system now generates personalized digital tickets for each invitation:
+
+- **HTML Tickets**: Mobile-optimized for browser viewing
+- **PDF Tickets**: For offline storage and printing
+- **Email Delivery**: Tickets are sent directly to guests via email
+- **Online Access**: Tickets can be viewed online via a direct URL
 
 ## Tech Stack
 
@@ -18,6 +29,7 @@ An automated check-in system that scans QR codes from invitations and marks gues
 - **Database**: PostgreSQL
 - **Containerization**: Docker & Docker Compose
 - **QR Code**: html5-qrcode
+- **PDF Generation**: WeasyPrint
 
 ## Project Structure
 
@@ -79,3 +91,4 @@ The system is designed to work with limited internet connectivity:
 - Frontend uses service workers for offline capabilities
 - Backend can operate in offline mode, syncing when connectivity is restored
 - Local storage for temporary data storage
+- Tickets can be downloaded and stored locally

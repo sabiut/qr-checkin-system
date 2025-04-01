@@ -2,8 +2,9 @@ import { useState, useEffect, useContext } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { Calendar, Clock, MapPin, Users, QrCode, Mail, Phone, AlertCircle, 
          PlusCircle, XCircle, ChevronLeft, Check, Loader2, UserCheck, ClipboardList,
-         Trash2, X } from 'lucide-react';
+         Trash2, X, Ticket } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
+import TicketViewer from '../components/TicketViewer';
 
 interface Event {
   id: number;
@@ -23,6 +24,8 @@ interface Invitation {
   guest_email: string;
   guest_phone: string;
   qr_code_url: string;
+  ticket_html_url?: string;
+  ticket_pdf_url?: string;
   created_at: string;
 }
 
@@ -725,8 +728,11 @@ export default function EventDetail() {
                             </div>
                           )}
                         </div>
-                        {invitation.qr_code_url ? (
-                          <div className="mt-3">
+
+                        {/* Ticket & QR Code Access */}
+                        <div className="mt-3 flex flex-wrap gap-3">
+                          {/* QR Code Button */}
+                          {invitation.qr_code_url ? (
                             <a 
                               href={`${import.meta.env.VITE_API_URL}${invitation.qr_code_url}`} 
                               target="_blank" 
@@ -734,53 +740,144 @@ export default function EventDetail() {
                               className="flex items-center gap-1.5 text-blue-600 text-sm hover:text-blue-800"
                             >
                               <QrCode size={16} />
-                              <span>View QR Code</span>
+                              <span>View QR</span>
                             </a>
-                            {invitation.guest_email && (
-                              <button 
-                                onClick={async () => {
-                                  try {
-                                    // Prepare headers with authentication token
-                                    const headers: HeadersInit = {
-                                      'Content-Type': 'application/json',
-                                    };
-                                    
-                                    // Add authentication token if available
-                                    if (token) {
-                                      headers['Authorization'] = `Token ${token}`;
-                                    }
-                                    
-                                    const response = await fetch(
-                                      `${import.meta.env.VITE_API_URL}/api/invitations/${invitation.id}/send_email/`,
-                                      {
-                                        method: 'POST',
-                                        headers
-                                      }
-                                    );
-                                    if (response.ok) {
-                                      alert(`Invitation email sent to ${invitation.guest_email}`);
-                                    } else {
-                                      const error = await response.json();
-                                      throw new Error(error.error || 'Failed to send email');
-                                    }
-                                  } catch (err) {
-                                    console.error('Error sending email:', err);
-                                    alert(`Error sending email: ${err instanceof Error ? err.message : String(err)}`);
+                          ) : (
+                            <div className="flex items-center gap-1.5 text-yellow-600 text-sm italic">
+                              <AlertCircle size={16} className="text-yellow-500" />
+                              <span>QR pending</span>
+                            </div>
+                          )}
+                          
+                          {/* Ticket Button */}
+                          {invitation.id && (
+                            <button
+                              onClick={() => {
+                                // Create modal or expand to show ticket
+                                const modal = document.createElement('div');
+                                modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4';
+                                
+                                // When the modal background is clicked, remove the modal
+                                modal.addEventListener('click', (e) => {
+                                  if (e.target === modal) {
+                                    document.body.removeChild(modal);
                                   }
-                                }}
-                                className="flex items-center gap-1.5 text-purple-600 text-sm hover:text-purple-800 mt-2"
-                              >
-                                <Mail size={16} />
-                                <span>Send QR by Email</span>
-                              </button>
-                            )}
-                          </div>
-                        ) : (
-                          <div className="mt-3 flex items-center gap-1.5 text-yellow-600 text-sm italic">
-                            <AlertCircle size={16} className="text-yellow-500" />
-                            <span>QR code will be available when online</span>
-                          </div>
-                        )}
+                                });
+                                
+                                const modalContent = document.createElement('div');
+                                modalContent.className = 'bg-white rounded-lg max-w-3xl w-full shadow-lg overflow-hidden';
+                                
+                                // Create a React root and render the TicketViewer
+                                const root = document.createElement('div');
+                                modalContent.appendChild(root);
+                                modal.appendChild(modalContent);
+                                document.body.appendChild(modal);
+                                
+                                // Create a close button at the top of the modal
+                                const closeButton = document.createElement('button');
+                                closeButton.className = 'absolute top-4 right-4 p-1 rounded-full bg-white text-gray-600 hover:bg-gray-100';
+                                closeButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
+                                closeButton.addEventListener('click', () => {
+                                  document.body.removeChild(modal);
+                                });
+                                modalContent.appendChild(closeButton);
+                                
+                                // Render the TicketViewer into the modal
+                                import('react-dom/client').then(({ createRoot }) => {
+                                  const reactRoot = createRoot(root);
+                                  reactRoot.render(
+                                    <TicketViewer 
+                                      invitation={{
+                                        ...invitation,
+                                        event: {
+                                          name: event.name,
+                                          date: event.date,
+                                          time: event.time,
+                                          location: event.location,
+                                          description: event.description
+                                        }
+                                      }} 
+                                      onSendEmail={async () => {
+                                        if (!invitation.guest_email) return;
+                                        
+                                        try {
+                                          // Prepare headers with authentication token
+                                          const headers: HeadersInit = {
+                                            'Content-Type': 'application/json',
+                                          };
+                                          
+                                          // Add authentication token if available
+                                          if (token) {
+                                            headers['Authorization'] = `Token ${token}`;
+                                          }
+                                          
+                                          const response = await fetch(
+                                            `${import.meta.env.VITE_API_URL}/api/invitations/${invitation.id}/send_email/`,
+                                            {
+                                              method: 'POST',
+                                              headers
+                                            }
+                                          );
+                                          if (!response.ok) {
+                                            const error = await response.json();
+                                            throw new Error(error.error || 'Failed to send email');
+                                          }
+                                        } catch (err) {
+                                          console.error('Error sending email:', err);
+                                          throw err;
+                                        }
+                                      }}
+                                    />
+                                  );
+                                });
+                              }}
+                              className="flex items-center gap-1.5 text-indigo-600 text-sm hover:text-indigo-800"
+                            >
+                              <Ticket size={16} />
+                              <span>View Ticket</span>
+                            </button>
+                          )}
+                          
+                          {/* Email Button */}
+                          {invitation.guest_email && (
+                            <button 
+                              onClick={async () => {
+                                try {
+                                  // Prepare headers with authentication token
+                                  const headers: HeadersInit = {
+                                    'Content-Type': 'application/json',
+                                  };
+                                  
+                                  // Add authentication token if available
+                                  if (token) {
+                                    headers['Authorization'] = `Token ${token}`;
+                                  }
+                                  
+                                  const response = await fetch(
+                                    `${import.meta.env.VITE_API_URL}/api/invitations/${invitation.id}/send_email/`,
+                                    {
+                                      method: 'POST',
+                                      headers
+                                    }
+                                  );
+                                  if (response.ok) {
+                                    alert(`Ticket email sent to ${invitation.guest_email}`);
+                                  } else {
+                                    const error = await response.json();
+                                    throw new Error(error.error || 'Failed to send email');
+                                  }
+                                } catch (err) {
+                                  console.error('Error sending email:', err);
+                                  alert(`Error sending email: ${err instanceof Error ? err.message : String(err)}`);
+                                }
+                              }}
+                              className="flex items-center gap-1.5 text-green-600 text-sm hover:text-green-800"
+                            >
+                              <Mail size={16} />
+                              <span>Send Email</span>
+                            </button>
+                          )}
+                        </div>
                       </li>
                     ))}
                   </ul>
