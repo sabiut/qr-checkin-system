@@ -3,6 +3,15 @@
  */
 export const SyncService = {
   /**
+   * Get the authentication token from local storage
+   */
+  getAuthToken(): string | null {
+    if (typeof window === 'undefined' || !window.localStorage) {
+      return null;
+    }
+    return localStorage.getItem('auth_token');
+  },
+  /**
    * Synchronize all local offline data with the server
    */
   async syncAll(): Promise<{ success: boolean; message: string }> {
@@ -52,10 +61,16 @@ export const SyncService = {
     }
     
     try {
+      const authToken = this.getAuthToken();
+      if (!authToken) {
+        throw new Error('Authentication required to sync events');
+      }
+      
       const response = await fetch(`${import.meta.env.VITE_API_URL}/api/events/sync/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Token ${authToken}`,
         },
         body: JSON.stringify(pendingEvents),
       });
@@ -99,10 +114,16 @@ export const SyncService = {
     }
     
     try {
+      const authToken = this.getAuthToken();
+      if (!authToken) {
+        throw new Error('Authentication required to sync invitations');
+      }
+      
       const response = await fetch(`${import.meta.env.VITE_API_URL}/api/invitations/sync/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Token ${authToken}`,
         },
         body: JSON.stringify(pendingInvitations),
       });
@@ -153,10 +174,16 @@ export const SyncService = {
     }
     
     try {
+      const authToken = this.getAuthToken();
+      if (!authToken) {
+        throw new Error('Authentication required to sync check-ins');
+      }
+      
       const response = await fetch(`${import.meta.env.VITE_API_URL}/api/attendance/sync-offline/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Token ${authToken}`,
         },
         body: JSON.stringify({ invitation_ids: offlineCheckIns }),
       });

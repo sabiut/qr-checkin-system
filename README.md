@@ -52,6 +52,30 @@ qr-checkin-system/
 - Node.js and npm (for local development)
 - Python (for local development)
 
+### Email Configuration
+
+The system can be configured to send tickets via email:
+
+1. Create a `.env` file in the backend directory based on `.env.example`
+2. Configure the email settings:
+
+```
+# For development (logs emails to console)
+EMAIL_BACKEND=django.core.mail.backends.console.EmailBackend
+
+# For production with Gmail
+EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
+EMAIL_HOST=smtp.gmail.com
+EMAIL_PORT=587
+EMAIL_USE_TLS=True
+EMAIL_HOST_USER=your-email@gmail.com
+EMAIL_HOST_PASSWORD=your-app-password
+DEFAULT_FROM_EMAIL=your-email@gmail.com
+```
+
+For Gmail, you need to use an App Password if 2FA is enabled.
+Generate one at: https://myaccount.google.com/apppasswords
+
 ### Running with Docker
 
 ```bash
