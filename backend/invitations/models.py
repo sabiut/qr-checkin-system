@@ -538,8 +538,7 @@ class Invitation(models.Model):
         """Generate a PDF ticket from the HTML ticket"""
         try:
             # Skip WeasyPrint entirely due to compatibility issues
-            logger.info("Skipping WeasyPrint PDF generation due to known compatibility issues")
-            logger.info("Using ReportLab for PDF generation instead")
+            logger.info("Using ReportLab for enhanced PDF ticket generation")
                 
             if not self.ticket_html:
                 self.generate_html_ticket()
@@ -547,53 +546,168 @@ class Invitation(models.Model):
             if not self.ticket_html:
                 return
             
-            # Skip directly to the ReportLab approach for reliability
+            # Use ReportLab for a professional PDF ticket
             try:
-                logger.info("Using ReportLab for PDF generation")
                 from reportlab.pdfgen import canvas
                 from reportlab.lib.pagesizes import letter
+                from reportlab.lib import colors
+                from reportlab.lib.units import inch
+                from reportlab.platypus import Paragraph, Frame
+                from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+                from reportlab.lib.enums import TA_CENTER
                 from io import BytesIO
                 
+                # Create a buffer and canvas
                 buffer = BytesIO()
                 p = canvas.Canvas(buffer, pagesize=letter)
+                width, height = letter
                 
-                # Add content to the PDF
-                p.setFont("Helvetica-Bold", 16)
-                p.drawString(100, 750, f"Event Ticket: {self.event.name}")
+                # Set up styles for paragraphs
+                styles = getSampleStyleSheet()
+                title_style = ParagraphStyle(
+                    'Title',
+                    parent=styles['Heading1'],
+                    fontSize=18,
+                    alignment=TA_CENTER,
+                    textColor=colors.HexColor('#4f46e5')
+                )
+                subtitle_style = ParagraphStyle(
+                    'Subtitle',
+                    parent=styles['Heading2'],
+                    fontSize=14,
+                    alignment=TA_CENTER,
+                    textColor=colors.HexColor('#2e27c0')
+                )
+                section_style = ParagraphStyle(
+                    'Section',
+                    parent=styles['Heading3'],
+                    fontSize=12,
+                    textColor=colors.HexColor('#4f46e5')
+                )
+                normal_style = styles['Normal']
                 
+                # Add a decorative header
+                p.setFillColorRGB(0.31, 0.27, 0.9)  # Color matching the HTML template
+                p.rect(0, height - 1.5*inch, width, 1.5*inch, fill=1)
+                
+                # Add event name and "Admission Ticket" text
+                p.setFillColorRGB(1, 1, 1)  # White
+                p.setFont("Helvetica-Bold", 22)
+                p.drawCentredString(width/2, height - 0.75*inch, self.event.name)
+                p.setFont("Helvetica", 16)
+                p.drawCentredString(width/2, height - inch, "Admission Ticket")
+                
+                # Reset fill color for rest of the document
+                p.setFillColorRGB(0, 0, 0)
+                
+                # Add Guest Information section
+                y_position = height - 2*inch
+                p.setFont("Helvetica-Bold", 14)
+                p.setFillColorRGB(0.31, 0.27, 0.9)  # Purple
+                p.drawString(inch, y_position, "Guest Information")
+                p.setFillColorRGB(0, 0, 0)  # Back to black
+                
+                # Add line under section title
+                p.setStrokeColorRGB(0.9, 0.9, 0.9)
+                p.line(inch, y_position - 10, 7*inch, y_position - 10)
+                
+                # Guest details
+                y_position -= 30
                 p.setFont("Helvetica-Bold", 12)
-                p.drawString(100, 700, "Guest Information:")
+                p.drawString(inch, y_position, "Name:")
                 p.setFont("Helvetica", 12)
-                p.drawString(120, 680, f"Name: {self.guest_name}")
+                p.drawString(2*inch, y_position, self.guest_name)
+                
                 if self.guest_email:
-                    p.drawString(120, 660, f"Email: {self.guest_email}")
+                    y_position -= 20
+                    p.setFont("Helvetica-Bold", 12)
+                    p.drawString(inch, y_position, "Email:")
+                    p.setFont("Helvetica", 12)
+                    p.drawString(2*inch, y_position, self.guest_email)
+                
                 if self.guest_phone:
-                    p.drawString(120, 640, f"Phone: {self.guest_phone}")
+                    y_position -= 20
+                    p.setFont("Helvetica-Bold", 12)
+                    p.drawString(inch, y_position, "Phone:")
+                    p.setFont("Helvetica", 12)
+                    p.drawString(2*inch, y_position, self.guest_phone)
                 
+                # Add Event Details section
+                y_position -= 40
+                p.setFont("Helvetica-Bold", 14)
+                p.setFillColorRGB(0.31, 0.27, 0.9)  # Purple
+                p.drawString(inch, y_position, "Event Details")
+                p.setFillColorRGB(0, 0, 0)  # Back to black
+                
+                # Add line under section title
+                p.setStrokeColorRGB(0.9, 0.9, 0.9)
+                p.line(inch, y_position - 10, 7*inch, y_position - 10)
+                
+                # Event details
+                y_position -= 30
                 p.setFont("Helvetica-Bold", 12)
-                p.drawString(100, 600, "Event Details:")
+                p.drawString(inch, y_position, "Date:")
                 p.setFont("Helvetica", 12)
-                p.drawString(120, 580, f"Date: {self.event.date}")
-                p.drawString(120, 560, f"Time: {self.event.time}")
-                p.drawString(120, 540, f"Location: {self.event.location}")
+                p.drawString(2*inch, y_position, str(self.event.date))
                 
+                y_position -= 20
                 p.setFont("Helvetica-Bold", 12)
-                p.drawString(100, 500, "Ticket ID:")
+                p.drawString(inch, y_position, "Time:")
                 p.setFont("Helvetica", 12)
-                p.drawString(120, 480, f"{self.id}")
+                p.drawString(2*inch, y_position, str(self.event.time))
                 
+                y_position -= 20
+                p.setFont("Helvetica-Bold", 12)
+                p.drawString(inch, y_position, "Location:")
+                p.setFont("Helvetica", 12)
+                p.drawString(2*inch, y_position, str(self.event.location))
+                
+                if hasattr(self.event, 'description') and self.event.description:
+                    y_position -= 20
+                    p.setFont("Helvetica-Bold", 12)
+                    p.drawString(inch, y_position, "Details:")
+                    # Description might be long, so we'll need to wrap it
+                    desc_style = styles['Normal']
+                    desc_frame = Frame(2*inch, y_position - 60, 5*inch, 60, showBoundary=0)
+                    desc_text = Paragraph(self.event.description, desc_style)
+                    desc_frame.addFromList([desc_text], p)
+                    y_position -= 70  # Adjust position after the description
+                
+                # Add QR Code
                 # If QR code exists, try to add it
                 if self.qr_code and os.path.exists(self.qr_code.path):
                     try:
                         from reportlab.lib.utils import ImageReader
-                        p.drawImage(ImageReader(self.qr_code.path), 250, 300, width=100, height=100)
+                        # Center the QR code
+                        qr_width = 2*inch
+                        qr_height = 2*inch
+                        qr_x = (width - qr_width) / 2
+                        y_position -= 20  # Add some space
+                        qr_y = y_position - qr_height
+                        p.drawImage(ImageReader(self.qr_code.path), qr_x, qr_y, width=qr_width, height=qr_height)
+                        
+                        # Add scanning instructions
+                        y_position = qr_y - 20
+                        p.setFont("Helvetica", 10)
+                        p.drawCentredString(width/2, y_position, "Scan for check-in")
+                        
+                        # Add ticket ID
+                        y_position -= 20
+                        p.setFont("Helvetica", 10)
+                        p.drawCentredString(width/2, y_position, f"Ticket ID: {self.id}")
                     except Exception as qr_error:
                         logger.error(f"Could not add QR code to PDF: {str(qr_error)}")
                 
-                p.setFont("Helvetica-Oblique", 10)
-                p.drawString(100, 200, "Please bring this ticket with you to the event.")
-                p.drawString(100, 180, "This ticket is personalized and non-transferrable.")
+                # Add footer
+                p.setStrokeColorRGB(0.9, 0.9, 0.9)
+                p.line(inch, inch, width-inch, inch)
                 
+                p.setFont("Helvetica-Oblique", 9)
+                p.drawString(inch, 0.8*inch, "This ticket is personalized and non-transferrable.")
+                p.drawString(inch, 0.6*inch, "Please present this QR code when you arrive at the event.")
+                p.drawCentredString(width/2, 0.4*inch, "Generated by QR Check-in System")
+                
+                # Save the PDF
                 p.showPage()
                 p.save()
                 
@@ -601,12 +715,74 @@ class Invitation(models.Model):
                 pdf_file = ContentFile(buffer.read())
                 self.ticket_pdf.save(f"ticket-{self.id}.pdf", pdf_file, save=False)
                 
-                logger.info(f"ReportLab PDF ticket generated successfully for invitation {self.id}")
+                logger.info(f"Enhanced PDF ticket generated successfully for invitation {self.id}")
+                return True
             except Exception as alt_e:
-                logger.error(f"ReportLab PDF generation failed: {str(alt_e)}")
-                raise
+                logger.error(f"Enhanced PDF generation failed: {str(alt_e)}")
+                # Try a simpler approach as fallback
+                return self._generate_simple_pdf_ticket()
                 
         except Exception as e:
-            # Log the error but don't prevent the invite from being created
             logger.error(f"Error generating PDF ticket: {str(e)}")
-            # Don't re-raise the exception - allow the invitation to be created
+            return False
+    
+    def _generate_simple_pdf_ticket(self):
+        """Generate a simple PDF ticket as fallback"""
+        try:
+            logger.info(f"Attempting simpler PDF generation for invitation {self.id}")
+            from reportlab.pdfgen import canvas
+            from reportlab.lib.pagesizes import letter
+            from io import BytesIO
+            
+            buffer = BytesIO()
+            p = canvas.Canvas(buffer, pagesize=letter)
+            
+            # Add content to the PDF
+            p.setFont("Helvetica-Bold", 16)
+            p.drawString(100, 750, f"Event Ticket: {self.event.name}")
+            
+            p.setFont("Helvetica-Bold", 12)
+            p.drawString(100, 700, "Guest Information:")
+            p.setFont("Helvetica", 12)
+            p.drawString(120, 680, f"Name: {self.guest_name}")
+            if self.guest_email:
+                p.drawString(120, 660, f"Email: {self.guest_email}")
+            if self.guest_phone:
+                p.drawString(120, 640, f"Phone: {self.guest_phone}")
+            
+            p.setFont("Helvetica-Bold", 12)
+            p.drawString(100, 600, "Event Details:")
+            p.setFont("Helvetica", 12)
+            p.drawString(120, 580, f"Date: {self.event.date}")
+            p.drawString(120, 560, f"Time: {self.event.time}")
+            p.drawString(120, 540, f"Location: {self.event.location}")
+            
+            p.setFont("Helvetica-Bold", 12)
+            p.drawString(100, 500, "Ticket ID:")
+            p.setFont("Helvetica", 12)
+            p.drawString(120, 480, f"{self.id}")
+            
+            # If QR code exists, try to add it
+            if self.qr_code and os.path.exists(self.qr_code.path):
+                try:
+                    from reportlab.lib.utils import ImageReader
+                    p.drawImage(ImageReader(self.qr_code.path), 250, 300, width=100, height=100)
+                except Exception as qr_error:
+                    logger.error(f"Could not add QR code to PDF: {str(qr_error)}")
+            
+            p.setFont("Helvetica-Oblique", 10)
+            p.drawString(100, 200, "Please bring this ticket with you to the event.")
+            p.drawString(100, 180, "This ticket is personalized and non-transferrable.")
+            
+            p.showPage()
+            p.save()
+            
+            buffer.seek(0)
+            pdf_file = ContentFile(buffer.read())
+            self.ticket_pdf.save(f"ticket-{self.id}.pdf", pdf_file, save=False)
+            
+            logger.info(f"Simple PDF ticket generated successfully for invitation {self.id}")
+            return True
+        except Exception as e:
+            logger.error(f"Simple PDF generation failed: {str(e)}")
+            return False

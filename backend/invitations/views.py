@@ -246,6 +246,8 @@ class InvitationViewSet(viewsets.ModelViewSet):
             - Time: {event.time}
             - Location: {event.location}
             
+            We've attached a PDF version of your ticket to this email that you can download, print, or keep on your device.
+            
             Please bring your ticket with the QR code to the event for quick check-in.
             You can view your ticket online at: {ticket_view_url}
             
@@ -494,11 +496,34 @@ class InvitationViewSet(viewsets.ModelViewSet):
             # Attach HTML content
             email.attach_alternative(html_message, "text/html")
             
-            # PDF ticket attachment was removed to simplify email sending
-            logger.info("PDF attachment is disabled to avoid potential issues")
+            # Attach PDF ticket to the email
+            if invitation.ticket_pdf and hasattr(invitation.ticket_pdf, 'path') and os.path.exists(invitation.ticket_pdf.path):
+                try:
+                    with open(invitation.ticket_pdf.path, 'rb') as pdf_file:
+                        pdf_data = pdf_file.read()
+                        
+                    logger.info(f"Attaching PDF ticket ({len(pdf_data)} bytes) to email")
+                    email.attach(f"Ticket-{invitation.event.name}.pdf", pdf_data, 'application/pdf')
+                    logger.info("PDF ticket attached successfully")
+                except Exception as e:
+                    logger.error(f"Failed to attach PDF ticket: {str(e)}")
+            else:
+                # Try to generate PDF if it doesn't exist
+                logger.info("PDF ticket file not found, attempting to generate it")
+                try:
+                    success = invitation.generate_pdf_ticket()
+                    if success and invitation.ticket_pdf and hasattr(invitation.ticket_pdf, 'path') and os.path.exists(invitation.ticket_pdf.path):
+                        with open(invitation.ticket_pdf.path, 'rb') as pdf_file:
+                            pdf_data = pdf_file.read()
+                        logger.info(f"Attaching newly generated PDF ticket ({len(pdf_data)} bytes) to email")
+                        email.attach(f"Ticket-{invitation.event.name}.pdf", pdf_data, 'application/pdf')
+                        logger.info("Newly generated PDF ticket attached successfully")
+                    else:
+                        logger.warning("Could not generate and attach PDF ticket")
+                except Exception as pdf_error:
+                    logger.error(f"Error generating PDF for attachment: {str(pdf_error)}")
             
-            # HTML ticket attachment was removed to simplify email sending
-            logger.info("HTML attachment is disabled to avoid potential issues")
+            # No need to attach HTML ticket separately since it's already in the email body
             
             # Send the email
             logger.info(f"Sending email to {invitation.guest_email}...")
@@ -583,6 +608,8 @@ class InvitationViewSet(viewsets.ModelViewSet):
         - Date: {event.date}
         - Time: {event.time}
         - Location: {event.location}
+        
+        We've attached a PDF version of your ticket to this email that you can download, print, or keep on your device.
         
         Please bring your ticket with the QR code to the event for quick check-in.
         You can view your ticket online at: {ticket_view_url}
@@ -700,6 +727,7 @@ class InvitationViewSet(viewsets.ModelViewSet):
                     </div>
                     
                     <p>Please save this email and present the QR code at the event entrance for quick check-in.</p>
+                    <p><strong>We've attached a PDF version of your ticket to this email</strong> that you can download, print, or keep on your device.</p>
                     <p>You can also access your ticket online at: <a href="{ticket_view_url}">{ticket_view_url}</a></p>
                     
                     <p>We look forward to seeing you!</p>
@@ -776,11 +804,34 @@ class InvitationViewSet(viewsets.ModelViewSet):
             logger.info("Attaching HTML content")
             email.attach_alternative(html_message, "text/html")
             
-            # PDF ticket attachment was removed to simplify email sending
-            logger.info("PDF attachment is disabled to avoid potential issues")
+            # Attach PDF ticket to the email
+            if invitation.ticket_pdf and hasattr(invitation.ticket_pdf, 'path') and os.path.exists(invitation.ticket_pdf.path):
+                try:
+                    with open(invitation.ticket_pdf.path, 'rb') as pdf_file:
+                        pdf_data = pdf_file.read()
+                        
+                    logger.info(f"Attaching PDF ticket ({len(pdf_data)} bytes) to email")
+                    email.attach(f"Ticket-{invitation.event.name}.pdf", pdf_data, 'application/pdf')
+                    logger.info("PDF ticket attached successfully")
+                except Exception as e:
+                    logger.error(f"Failed to attach PDF ticket: {str(e)}")
+            else:
+                # Try to generate PDF if it doesn't exist
+                logger.info("PDF ticket file not found, attempting to generate it")
+                try:
+                    success = invitation.generate_pdf_ticket()
+                    if success and invitation.ticket_pdf and hasattr(invitation.ticket_pdf, 'path') and os.path.exists(invitation.ticket_pdf.path):
+                        with open(invitation.ticket_pdf.path, 'rb') as pdf_file:
+                            pdf_data = pdf_file.read()
+                        logger.info(f"Attaching newly generated PDF ticket ({len(pdf_data)} bytes) to email")
+                        email.attach(f"Ticket-{invitation.event.name}.pdf", pdf_data, 'application/pdf')
+                        logger.info("Newly generated PDF ticket attached successfully")
+                    else:
+                        logger.warning("Could not generate and attach PDF ticket")
+                except Exception as pdf_error:
+                    logger.error(f"Error generating PDF for attachment: {str(pdf_error)}")
             
-            # HTML ticket attachment was removed to simplify email sending
-            logger.info("HTML attachment is disabled to avoid potential issues")
+            # No need to attach HTML ticket separately since it's already in the email body
                 
             # Send email
             logger.info("Sending email...")
