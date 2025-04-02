@@ -7,12 +7,13 @@ interface Event {
   name: string;
   date: string;
   location: string;
-  attendees: number;
+  totalAttendees: number;
+  checkedIn: number;
   capacity: number;
 }
 
 export default function EventsPage() {
-  const { user } = useContext(AuthContext);
+  const { user, token, isAuthenticated } = useContext(AuthContext);
   const [events, setEvents] = useState<Event[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -22,57 +23,134 @@ export default function EventsPage() {
       try {
         setIsLoading(true);
         
-        // For development/demo purposes, use sample data instead of real API call
-        // In a production environment, you would uncomment the API call below
-        // const response = await fetch('/api/events/');
-        // if (!response.ok) {
-        //   throw new Error('Failed to fetch events');
-        // }
-        // const data = await response.json();
+        // Use token from context
+        if (!token || !isAuthenticated) {
+          throw new Error('Authentication required');
+        }
         
-        // Simulate API delay
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        // Sample data for demonstration
-        const sampleEvents = [
-          {
-            id: '1',
-            name: 'Annual Tech Conference',
-            date: '2025-05-15',
-            location: 'Convention Center',
-            attendees: 235,
-            capacity: 500
-          },
-          {
-            id: '2',
-            name: 'Product Launch',
-            date: '2025-06-10',
-            location: 'Downtown Hotel',
-            attendees: 86,
-            capacity: 150
-          },
-          {
-            id: '3',
-            name: 'Team Building Workshop',
-            date: '2025-04-22',
-            location: 'Office Campus',
-            attendees: 42,
-            capacity: 50
+        // Use the proper API URL with environment variable
+        // Make sure we have a proper API URL
+        let apiUrl = import.meta.env.VITE_API_URL;
+        if (!apiUrl) {
+          console.warn('VITE_API_URL is not defined in environment variables, falling back to http://localhost:8000');
+          // If in development, try to use a fallback URL
+          if (process.env.NODE_ENV === 'development') {
+            apiUrl = 'http://localhost:8000';
+          } else {
+            throw new Error('API URL configuration is missing');
           }
-        ];
+        }
         
-        setEvents(sampleEvents);
+        // Make an actual API call to get events from the backend
+        console.log(`Making API request to: ${apiUrl}/api/events/`);
+        const response = await fetch(`${apiUrl}/api/events/`, {
+          headers: {
+            'Authorization': `Token ${token}`,
+            'Content-Type': 'application/json',
+          }
+        });
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch events');
+        }
+        
+        const eventsData = await response.json();
+        
+        // Process the events to get attendance counts
+        const processedEvents = await Promise.all(eventsData.map(async (event: any) => {
+          try {
+            // For each event, we need to also get information about attendance
+            const attendanceResponse = await fetch(`${apiUrl}/api/attendance/?event_id=${event.id}`, {
+              headers: {
+                'Authorization': `Token ${token}`,
+                'Content-Type': 'application/json',
+              }
+            });
+            const attendanceData = attendanceResponse.ok ? await attendanceResponse.json() : [];
+            
+            // Calculate checked-in attendees
+            const checkedInCount = attendanceData.filter((record: any) => record.has_attended).length;
+            
+            // Get invitations count for this event (represents registered attendees)
+            const invitationsResponse = await fetch(`${apiUrl}/api/invitations/?event=${event.id}`, {
+              headers: {
+                'Authorization': `Token ${token}`,
+                'Content-Type': 'application/json',
+              }
+            });
+            const invitationsData = invitationsResponse.ok ? await invitationsResponse.json() : [];
+            
+            // Return the processed event with attendance data
+            return {
+              id: event.id,
+              name: event.name,
+              date: event.date,
+              location: event.location,
+              totalAttendees: invitationsData.length || event.attendee_count || 0,
+              checkedIn: checkedInCount || 0,
+              capacity: event.max_attendees || 0
+            };
+          } catch (err) {
+            console.error(`Error processing event ${event.id}:`, err);
+            return {
+              id: event.id,
+              name: event.name,
+              date: event.date,
+              location: event.location,
+              totalAttendees: event.attendee_count || 0,
+              checkedIn: 0,
+              capacity: event.max_attendees || 0
+            };
+          }
+        }));
+        
+        setEvents(processedEvents);
         setError(null);
       } catch (err) {
         console.error('Error fetching events:', err);
         setError('Unable to load events. Please try again later.');
+        
+        // If the API call fails in development, fall back to sample data
+        if (process.env.NODE_ENV === 'development') {
+          console.log('Using sample data for development');
+          setEvents([
+            {
+              id: '1',
+              name: 'Annual Tech Conference',
+              date: '2025-05-15',
+              location: 'Convention Center',
+              totalAttendees: 235,
+              checkedIn: 210,
+              capacity: 500
+            },
+            {
+              id: '2',
+              name: 'Product Launch',
+              date: '2025-06-10',
+              location: 'Downtown Hotel',
+              totalAttendees: 86,
+              checkedIn: 76,
+              capacity: 150
+            },
+            {
+              id: '3',
+              name: 'Team Building Workshop',
+              date: '2025-04-22',
+              location: 'Office Campus',
+              totalAttendees: 42,
+              checkedIn: 38,
+              capacity: 50
+            }
+          ]);
+          setError(null);
+        }
       } finally {
         setIsLoading(false);
       }
     };
 
     fetchEvents();
-  }, []);
+  }, [token, isAuthenticated]);
 
   return (
     <div className="min-h-screen bg-gray-50 py-12">
@@ -143,20 +221,31 @@ export default function EventsPage() {
                   </div>
                   <div className="flex justify-between items-center">
                     <div>
-                      <div className="text-sm text-gray-500 mb-1">Attendance</div>
+                      <div className="text-sm text-gray-500 mb-1">Registration</div>
                       <div className="flex items-center">
-                        <span className="font-semibold">{event.attendees}/{event.capacity}</span>
+                        <span className="font-semibold">{event.totalAttendees}/{event.capacity}</span>
+                        <div className="ml-2 h-2 w-20 bg-gray-200 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-blue-500 rounded-full" 
+                            style={{ width: `${Math.min(100, (event.totalAttendees / event.capacity) * 100)}%` }}
+                          ></div>
+                        </div>
+                      </div>
+                      
+                      <div className="text-sm text-gray-500 mt-2 mb-1">Check-in Rate</div>
+                      <div className="flex items-center">
+                        <span className="font-semibold">{Math.round((event.checkedIn / event.totalAttendees) * 100)}%</span>
                         <div className="ml-2 h-2 w-20 bg-gray-200 rounded-full overflow-hidden">
                           <div 
                             className="h-full bg-green-500 rounded-full" 
-                            style={{ width: `${Math.min(100, (event.attendees / event.capacity) * 100)}%` }}
+                            style={{ width: `${Math.min(100, (event.checkedIn / event.totalAttendees) * 100)}%` }}
                           ></div>
                         </div>
                       </div>
                     </div>
-                    <div className="bg-blue-50 text-blue-700 text-sm font-medium py-1 px-3 rounded-full">
-                      Manage
-                    </div>
+                    <Link to={`/events/${event.id}/check-in`} className="bg-blue-600 text-white text-sm font-medium py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors">
+                      Check-in
+                    </Link>
                   </div>
                 </div>
               </Link>

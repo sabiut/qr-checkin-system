@@ -20,8 +20,9 @@ interface ChartData {
 }
 
 export default function Dashboard() {
-  const { user } = useContext(AuthContext);
+  const { user, token, isAuthenticated } = useContext(AuthContext);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [stats, setStats] = useState<{
     upcomingEvents: number;
     totalAttendees: number;
@@ -33,50 +34,160 @@ export default function Dashboard() {
     const fetchDashboardData = async () => {
       try {
         setIsLoading(true);
-        // This would normally be an API call
-        // const response = await fetch('/api/dashboard');
-        // const data = await response.json();
+        setError(null);
         
-        // Simulate API response
-        setTimeout(() => {
-          setStats({
-            upcomingEvents: 3,
-            totalAttendees: 363,
-            checkInRate: 78,
-            events: [
-              {
-                id: '1',
-                name: 'Annual Tech Conference',
-                totalAttendees: 235,
-                checkedIn: 180,
-                capacity: 500
-              },
-              {
-                id: '2',
-                name: 'Product Launch',
-                totalAttendees: 86,
-                checkedIn: 72,
-                capacity: 150
-              },
-              {
-                id: '3',
-                name: 'Team Building Workshop',
-                totalAttendees: 42,
-                checkedIn: 31,
-                capacity: 50
+        // Use token from context
+        if (!token || !isAuthenticated) {
+          throw new Error('Authentication required');
+        }
+        
+        // Use the proper API URL with environment variable
+        // Make sure we have a proper API URL
+        let apiUrl = import.meta.env.VITE_API_URL;
+        if (!apiUrl) {
+          console.warn('VITE_API_URL is not defined in environment variables, falling back to http://localhost:8000');
+          // If in development, try to use a fallback URL
+          if (process.env.NODE_ENV === 'development') {
+            apiUrl = 'http://localhost:8000';
+          } else {
+            throw new Error('API URL configuration is missing');
+          }
+        }
+        
+        // Make an actual API call to get events from the backend
+        console.log(`Making API request to: ${apiUrl}/api/events/`);
+        const response = await fetch(`${apiUrl}/api/events/`, {
+          headers: {
+            'Authorization': `Token ${token}`,
+            'Content-Type': 'application/json',
+          }
+        });
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch events');
+        }
+        
+        const eventsData = await response.json();
+        
+        // Process the events to get attendance counts
+        const processedEvents = await Promise.all(eventsData.map(async (event: any) => {
+          try {
+            // For each event, we need to also get information about attendance
+            const attendanceResponse = await fetch(`${apiUrl}/api/attendance/?event_id=${event.id}`, {
+              headers: {
+                'Authorization': `Token ${token}`,
+                'Content-Type': 'application/json',
               }
-            ]
+            });
+            const attendanceData = attendanceResponse.ok ? await attendanceResponse.json() : [];
+            
+            // Calculate checked-in attendees
+            const checkedInCount = attendanceData.filter((record: any) => record.has_attended).length;
+            
+            // Get invitations count for this event (represents registered attendees)
+            const invitationsResponse = await fetch(`${apiUrl}/api/invitations/?event=${event.id}`, {
+              headers: {
+                'Authorization': `Token ${token}`,
+                'Content-Type': 'application/json',
+              }
+            });
+            const invitationsData = invitationsResponse.ok ? await invitationsResponse.json() : [];
+            
+            // Return the processed event with attendance data
+            return {
+              id: event.id,
+              name: event.name,
+              date: event.date,
+              location: event.location,
+              totalAttendees: invitationsData.length || event.attendee_count || 0,
+              checkedIn: checkedInCount || 0,
+              capacity: event.max_attendees || 0
+            };
+          } catch (err) {
+            console.error(`Error processing event ${event.id}:`, err);
+            return {
+              id: event.id,
+              name: event.name,
+              date: event.date,
+              location: event.location,
+              totalAttendees: event.attendee_count || 0,
+              checkedIn: 0,
+              capacity: event.max_attendees || 0
+            };
+          }
+        }));
+        
+        // Calculate total attendees and check-in rate from the processed events
+        const totalAttendees = processedEvents.reduce((sum, event) => sum + event.totalAttendees, 0);
+        const totalCheckedIn = processedEvents.reduce((sum, event) => sum + event.checkedIn, 0);
+        const overallCheckInRate = totalAttendees > 0 ? Math.round((totalCheckedIn / totalAttendees) * 100) : 0;
+        
+        setStats({
+          upcomingEvents: processedEvents.length,
+          totalAttendees: totalAttendees,
+          checkInRate: overallCheckInRate,
+          events: processedEvents
+        });
+        
+      } catch (err) {
+        console.error('Error fetching dashboard data:', err);
+        setError('Unable to load dashboard data. Please try again later.');
+        
+        // If the API call fails in development, fall back to sample data
+        if (process.env.NODE_ENV === 'development') {
+          console.log('Using sample data for development');
+          
+          // Sample data that matches the events page
+          const sampleEvents = [
+            {
+              id: '1',
+              name: 'Annual Tech Conference',
+              date: '2025-05-15',
+              location: 'Convention Center',
+              totalAttendees: 235,
+              checkedIn: 210,
+              capacity: 500
+            },
+            {
+              id: '2',
+              name: 'Product Launch',
+              date: '2025-06-10',
+              location: 'Downtown Hotel',
+              totalAttendees: 86,
+              checkedIn: 76,
+              capacity: 150
+            },
+            {
+              id: '3',
+              name: 'Team Building Workshop',
+              date: '2025-04-22',
+              location: 'Office Campus',
+              totalAttendees: 42,
+              checkedIn: 38,
+              capacity: 50
+            }
+          ];
+          
+          const totalAttendees = sampleEvents.reduce((sum, event) => sum + event.totalAttendees, 0);
+          const totalCheckedIn = sampleEvents.reduce((sum, event) => sum + event.checkedIn, 0);
+          const overallCheckInRate = Math.round((totalCheckedIn / totalAttendees) * 100);
+          
+          setStats({
+            upcomingEvents: sampleEvents.length,
+            totalAttendees: totalAttendees,
+            checkInRate: overallCheckInRate,
+            events: sampleEvents
           });
-          setIsLoading(false);
-        }, 1000);
-      } catch (error) {
-        console.error('Error fetching dashboard data:', error);
+          
+          setError(null);
+        }
+      } finally {
         setIsLoading(false);
       }
     };
 
     fetchDashboardData();
-  }, []);
+  }, [token, isAuthenticated]);
 
   // Helper for stat cards
   const StatCard = ({ title, value, icon, color }: { title: string; value: string | number; icon: React.ReactNode; color: string }) => (
@@ -114,6 +225,29 @@ export default function Dashboard() {
         {isLoading ? (
           <div className="flex justify-center items-center h-64">
             <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+          </div>
+        ) : error ? (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+            {error}
+          </div>
+        ) : stats.events.length === 0 ? (
+          <div className="bg-white rounded-xl shadow-md p-8 text-center">
+            <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+              </svg>
+            </div>
+            <h2 className="text-xl font-semibold mb-2">No events yet</h2>
+            <p className="text-gray-600 mb-6">Create your first event to start tracking attendance</p>
+            <Link 
+              to="/events/new" 
+              className="inline-flex items-center justify-center gap-2 bg-blue-600 text-white px-5 py-2.5 rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+            >
+              <span>Create Event</span>
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M10.293 5.293a1 1 0 011.414 0l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414-1.414L12.586 11H5a1 1 0 110-2h7.586l-2.293-2.293a1 1 0 010-1.414z" clipRule="evenodd" />
+              </svg>
+            </Link>
           </div>
         ) : (
           <>
@@ -175,11 +309,13 @@ export default function Dashboard() {
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{event.checkedIn}</td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center">
-                            <span className="text-sm text-gray-900 mr-2">{Math.round((event.checkedIn / event.totalAttendees) * 100)}%</span>
+                            <span className="text-sm text-gray-900 mr-2">
+                              {event.totalAttendees ? Math.round((event.checkedIn / event.totalAttendees) * 100) : 0}%
+                            </span>
                             <div className="w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
                               <div 
                                 className="h-full bg-green-500 rounded-full" 
-                                style={{ width: `${Math.round((event.checkedIn / event.totalAttendees) * 100)}%` }}
+                                style={{ width: `${event.totalAttendees ? Math.round((event.checkedIn / event.totalAttendees) * 100) : 0}%` }}
                               ></div>
                             </div>
                           </div>
