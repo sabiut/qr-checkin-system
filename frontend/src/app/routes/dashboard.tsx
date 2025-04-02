@@ -321,7 +321,7 @@ export default function Dashboard() {
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                          <Link to={`/events/${event.id}`} className="text-blue-600 hover:text-blue-900">View</Link>
+                          <Link to={`/events/${event.id}`} className="text-indigo-600 hover:text-indigo-900">Manage</Link>
                           <span className="mx-2 text-gray-300">|</span>
                           <Link to={`/events/${event.id}/check-in`} className="text-green-600 hover:text-green-900">Check-in</Link>
                         </td>

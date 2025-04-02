@@ -198,14 +198,15 @@ export default function EventsPage() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {events.map((event) => (
-              <Link 
+              <div 
                 key={event.id} 
-                to={`/events/${event.id}`}
                 className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-lg transition-shadow group"
               >
                 <div className="bg-gradient-to-r from-blue-600 to-indigo-700 h-3 group-hover:h-4 transition-all"></div>
                 <div className="p-6">
-                  <h2 className="text-xl font-bold text-gray-900 mb-2 group-hover:text-blue-600 transition-colors">{event.name}</h2>
+                  <Link to={`/events/${event.id}`}>
+                    <h2 className="text-xl font-bold text-gray-900 mb-2 hover:text-blue-600 transition-colors">{event.name}</h2>
+                  </Link>
                   <div className="flex items-center text-gray-600 mb-4">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -219,7 +220,8 @@ export default function EventsPage() {
                     </svg>
                     <span>{event.location}</span>
                   </div>
-                  <div className="flex justify-between items-center">
+                  
+                  <div className="flex flex-col space-y-4">
                     <div>
                       <div className="text-sm text-gray-500 mb-1">Registration</div>
                       <div className="flex items-center">
@@ -243,12 +245,24 @@ export default function EventsPage() {
                         </div>
                       </div>
                     </div>
-                    <Link to={`/events/${event.id}/check-in`} className="bg-blue-600 text-white text-sm font-medium py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors">
-                      Check-in
-                    </Link>
+                    
+                    <div className="flex justify-between items-center pt-4 border-t border-gray-100">
+                      <Link 
+                        to={`/events/${event.id}`} 
+                        className="bg-indigo-600 text-white text-sm font-medium py-2 px-4 rounded-lg hover:bg-indigo-700 transition-colors"
+                      >
+                        Manage
+                      </Link>
+                      <Link 
+                        to={`/events/${event.id}/check-in`} 
+                        className="bg-blue-600 text-white text-sm font-medium py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors"
+                      >
+                        Check-in
+                      </Link>
+                    </div>
                   </div>
                 </div>
-              </Link>
+              </div>
             ))}
           </div>
         )}
