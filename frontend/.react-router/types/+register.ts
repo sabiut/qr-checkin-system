@@ -11,6 +11,7 @@ type Params = {
   "/": {};
   "/login": {};
   "/register": {};
+  "/events": {};
   "/events/new": {};
   "/events/:eventId": {
     "eventId": string;
@@ -18,4 +19,5 @@ type Params = {
   "/events/:eventId/check-in": {
     "eventId": string;
   };
+  "/dashboard": {};
 };

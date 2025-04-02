@@ -16,6 +16,10 @@ export default [
   },
   // Protected routes that require authentication
   {
+    path: "events",
+    file: "routes/events.tsx",
+  },
+  {
     path: "events/new",
     file: "routes/events.new.tsx",
   },
@@ -26,5 +30,9 @@ export default [
   {
     path: "events/:eventId/check-in",
     file: "routes/events.$eventId.check-in.tsx",
+  },
+  {
+    path: "dashboard",
+    file: "routes/dashboard.tsx",
   },
 ] satisfies RouteConfig;

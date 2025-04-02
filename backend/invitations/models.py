@@ -535,10 +535,9 @@ class Invitation(models.Model):
         return html
         
     def generate_pdf_ticket(self):
-        """Generate a PDF ticket from the HTML ticket"""
+        """Generate a professional PDF ticket from the HTML ticket"""
         try:
-            # Skip WeasyPrint entirely due to compatibility issues
-            logger.info("Using ReportLab for enhanced PDF ticket generation")
+            logger.info("Using ReportLab for professional PDF ticket generation")
                 
             if not self.ticket_html:
                 self.generate_html_ticket()
@@ -554,7 +553,6 @@ class Invitation(models.Model):
                 from reportlab.lib.units import inch
                 from reportlab.platypus import Paragraph, Frame
                 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-                from reportlab.lib.enums import TA_CENTER
                 from io import BytesIO
                 
                 # Create a buffer and canvas
@@ -562,150 +560,223 @@ class Invitation(models.Model):
                 p = canvas.Canvas(buffer, pagesize=letter)
                 width, height = letter
                 
+                # Define colors
+                primary_color = colors.HexColor('#4f46e5')  # Purple
+                light_gray = colors.HexColor('#f9f9f9')
+                
                 # Set up styles for paragraphs
                 styles = getSampleStyleSheet()
-                title_style = ParagraphStyle(
-                    'Title',
-                    parent=styles['Heading1'],
-                    fontSize=18,
-                    alignment=TA_CENTER,
-                    textColor=colors.HexColor('#4f46e5')
-                )
-                subtitle_style = ParagraphStyle(
-                    'Subtitle',
-                    parent=styles['Heading2'],
-                    fontSize=14,
-                    alignment=TA_CENTER,
-                    textColor=colors.HexColor('#2e27c0')
-                )
-                section_style = ParagraphStyle(
-                    'Section',
-                    parent=styles['Heading3'],
-                    fontSize=12,
-                    textColor=colors.HexColor('#4f46e5')
-                )
                 normal_style = styles['Normal']
                 
-                # Add a decorative header
-                p.setFillColorRGB(0.31, 0.27, 0.9)  # Color matching the HTML template
-                p.rect(0, height - 1.5*inch, width, 1.5*inch, fill=1)
+                # Create background for the page
+                p.setFillColor(light_gray)
+                p.rect(0, 0, width, height, fill=1, stroke=0)
                 
-                # Add event name and "Admission Ticket" text
-                p.setFillColorRGB(1, 1, 1)  # White
-                p.setFont("Helvetica-Bold", 22)
-                p.drawCentredString(width/2, height - 0.75*inch, self.event.name)
+                # Create a white ticket area
+                margin = 0.5 * inch
+                ticket_width = width - 2 * margin
+                ticket_height = height - 2 * margin
+                p.setFillColor(colors.white)
+                p.roundRect(margin, margin, ticket_width, ticket_height, radius=10, fill=1, stroke=0)
+                
+                # Add a colored header
+                header_height = 1.5 * inch
+                p.setFillColor(primary_color)
+                p.roundRect(margin, height - margin - header_height, 
+                          ticket_width, header_height, 
+                          radius=10, fill=1, stroke=0)
+                
+                # Add event name and "Admission Ticket" text in header
+                p.setFillColor(colors.white)
+                
+                # Event name
+                p.setFont("Helvetica-Bold", 24)
+                event_name = self.event.name
+                # If name is too long, use a smaller font
+                if len(event_name) > 30:
+                    p.setFont("Helvetica-Bold", 18)
+                p.drawCentredString(width/2, height - margin - header_height/2 - 0.1*inch, event_name)
+                
+                # Admission Ticket text
                 p.setFont("Helvetica", 16)
-                p.drawCentredString(width/2, height - inch, "Admission Ticket")
+                p.drawCentredString(width/2, height - margin - header_height/2 - 0.4*inch, "ADMISSION TICKET")
                 
-                # Reset fill color for rest of the document
-                p.setFillColorRGB(0, 0, 0)
+                # Draw a horizontal line under the header
+                p.setStrokeColor(colors.lightgrey)
+                p.setLineWidth(1)
+                p.line(margin + 0.2*inch, height - margin - header_height, 
+                      width - margin - 0.2*inch, height - margin - header_height)
+                
+                # Starting position for content
+                y_position = height - margin - header_height - 0.5*inch
+                
+                # Define column layout
+                left_column = margin + 0.5*inch
+                right_column = width/2 + 0.5*inch
                 
                 # Add Guest Information section
-                y_position = height - 2*inch
                 p.setFont("Helvetica-Bold", 14)
-                p.setFillColorRGB(0.31, 0.27, 0.9)  # Purple
-                p.drawString(inch, y_position, "Guest Information")
-                p.setFillColorRGB(0, 0, 0)  # Back to black
+                p.setFillColor(primary_color)
+                p.drawString(left_column, y_position, "GUEST INFORMATION")
                 
                 # Add line under section title
-                p.setStrokeColorRGB(0.9, 0.9, 0.9)
-                p.line(inch, y_position - 10, 7*inch, y_position - 10)
+                p.setStrokeColor(colors.lightgrey)
+                p.line(left_column, y_position - 0.1*inch, 
+                      width/2 - 0.5*inch, y_position - 0.1*inch)
                 
                 # Guest details
-                y_position -= 30
+                p.setFillColor(colors.black)
+                y_position -= 0.5*inch
                 p.setFont("Helvetica-Bold", 12)
-                p.drawString(inch, y_position, "Name:")
+                p.drawString(left_column, y_position, "Name:")
                 p.setFont("Helvetica", 12)
-                p.drawString(2*inch, y_position, self.guest_name)
+                p.drawString(left_column + 1*inch, y_position, self.guest_name)
                 
                 if self.guest_email:
-                    y_position -= 20
+                    y_position -= 0.3*inch
                     p.setFont("Helvetica-Bold", 12)
-                    p.drawString(inch, y_position, "Email:")
+                    p.drawString(left_column, y_position, "Email:")
                     p.setFont("Helvetica", 12)
-                    p.drawString(2*inch, y_position, self.guest_email)
+                    
+                    # Handle long email addresses
+                    email = self.guest_email
+                    if len(email) > 25:
+                        p.drawString(left_column + 1*inch, y_position, email[:25] + "...")
+                    else:
+                        p.drawString(left_column + 1*inch, y_position, email)
                 
                 if self.guest_phone:
-                    y_position -= 20
+                    y_position -= 0.3*inch
                     p.setFont("Helvetica-Bold", 12)
-                    p.drawString(inch, y_position, "Phone:")
+                    p.drawString(left_column, y_position, "Phone:")
                     p.setFont("Helvetica", 12)
-                    p.drawString(2*inch, y_position, self.guest_phone)
+                    p.drawString(left_column + 1*inch, y_position, self.guest_phone)
                 
                 # Add Event Details section
-                y_position -= 40
+                y_position -= 0.5*inch
                 p.setFont("Helvetica-Bold", 14)
-                p.setFillColorRGB(0.31, 0.27, 0.9)  # Purple
-                p.drawString(inch, y_position, "Event Details")
-                p.setFillColorRGB(0, 0, 0)  # Back to black
+                p.setFillColor(primary_color)
+                p.drawString(left_column, y_position, "EVENT DETAILS")
                 
                 # Add line under section title
-                p.setStrokeColorRGB(0.9, 0.9, 0.9)
-                p.line(inch, y_position - 10, 7*inch, y_position - 10)
+                p.setStrokeColor(colors.lightgrey)
+                p.line(left_column, y_position - 0.1*inch, 
+                      width/2 - 0.5*inch, y_position - 0.1*inch)
                 
                 # Event details
-                y_position -= 30
+                p.setFillColor(colors.black)
+                y_position -= 0.5*inch
                 p.setFont("Helvetica-Bold", 12)
-                p.drawString(inch, y_position, "Date:")
+                p.drawString(left_column, y_position, "Date:")
                 p.setFont("Helvetica", 12)
-                p.drawString(2*inch, y_position, str(self.event.date))
+                p.drawString(left_column + 1*inch, y_position, str(self.event.date))
                 
-                y_position -= 20
+                y_position -= 0.3*inch
                 p.setFont("Helvetica-Bold", 12)
-                p.drawString(inch, y_position, "Time:")
+                p.drawString(left_column, y_position, "Time:")
                 p.setFont("Helvetica", 12)
-                p.drawString(2*inch, y_position, str(self.event.time))
+                p.drawString(left_column + 1*inch, y_position, str(self.event.time))
                 
-                y_position -= 20
+                y_position -= 0.3*inch
                 p.setFont("Helvetica-Bold", 12)
-                p.drawString(inch, y_position, "Location:")
+                p.drawString(left_column, y_position, "Location:")
                 p.setFont("Helvetica", 12)
-                p.drawString(2*inch, y_position, str(self.event.location))
                 
-                if hasattr(self.event, 'description') and self.event.description:
-                    y_position -= 20
-                    p.setFont("Helvetica-Bold", 12)
-                    p.drawString(inch, y_position, "Details:")
-                    # Description might be long, so we'll need to wrap it
-                    desc_style = styles['Normal']
-                    desc_frame = Frame(2*inch, y_position - 60, 5*inch, 60, showBoundary=0)
-                    desc_text = Paragraph(self.event.description, desc_style)
-                    desc_frame.addFromList([desc_text], p)
-                    y_position -= 70  # Adjust position after the description
+                # Location might be long, wrap it
+                location = str(self.event.location)
+                if len(location) > 25:
+                    # Create a paragraph for the location
+                    location_style = ParagraphStyle(
+                        'Location',
+                        parent=normal_style,
+                        leading=14
+                    )
+                    location_frame = Frame(
+                        left_column + 1*inch, y_position - 0.8*inch, 
+                        width/2 - 2*inch, 0.8*inch, 
+                        showBoundary=0
+                    )
+                    location_para = Paragraph(location, location_style)
+                    location_frame.addFromList([location_para], p)
+                    y_position -= 0.9*inch  # Adjust position
+                else:
+                    p.drawString(left_column + 1*inch, y_position, location)
+                    y_position -= 0.3*inch
+                
+                # Add QR Code section in right column
+                # Create a light gray box for the QR code
+                qr_box_top = height - margin - header_height - 0.5*inch
+                qr_box_height = 5*inch
+                p.setFillColor(light_gray)
+                p.roundRect(right_column - 0.5*inch, qr_box_top - qr_box_height, 
+                          width/2 - 0.5*inch, qr_box_height, 
+                          radius=10, fill=1, stroke=0)
+                
+                # Add "SCAN FOR CHECK-IN" header
+                p.setFillColor(primary_color)
+                p.setFont("Helvetica-Bold", 14)
+                p.drawCentredString(width - width/4, qr_box_top - 0.7*inch, "SCAN FOR CHECK-IN")
                 
                 # Add QR Code
-                # If QR code exists, try to add it
                 if self.qr_code and os.path.exists(self.qr_code.path):
                     try:
                         from reportlab.lib.utils import ImageReader
-                        # Center the QR code
-                        qr_width = 2*inch
-                        qr_height = 2*inch
-                        qr_x = (width - qr_width) / 2
-                        y_position -= 20  # Add some space
-                        qr_y = y_position - qr_height
-                        p.drawImage(ImageReader(self.qr_code.path), qr_x, qr_y, width=qr_width, height=qr_height)
                         
-                        # Add scanning instructions
-                        y_position = qr_y - 20
-                        p.setFont("Helvetica", 10)
-                        p.drawCentredString(width/2, y_position, "Scan for check-in")
+                        # Calculate box center for better vertical alignment
+                        qr_box_center_y = qr_box_top - (qr_box_height / 2)
+                        
+                        # Set QR code size (slightly larger)
+                        qr_size = 3.2*inch
+                        
+                        # Center the QR code horizontally and vertically in the box
+                        qr_x = width - width/4 - qr_size/2
+                        
+                        # Position QR code lower by centering it vertically in the box
+                        # and adding a small offset to move it down from the header
+                        qr_y = qr_box_center_y - qr_size/2 - 0.3*inch
+                        
+                        # Add white background for QR code with more padding
+                        p.setFillColor(colors.white)
+                        padding = 0.25*inch
+                        p.roundRect(qr_x - padding, qr_y - padding, 
+                                  qr_size + 2*padding, qr_size + 2*padding, 
+                                  radius=10, fill=1, stroke=0)
+                        
+                        # Draw QR code
+                        p.drawImage(ImageReader(self.qr_code.path), qr_x, qr_y, width=qr_size, height=qr_size)
                         
                         # Add ticket ID
-                        y_position -= 20
+                        p.setFillColor(colors.black)
                         p.setFont("Helvetica", 10)
-                        p.drawCentredString(width/2, y_position, f"Ticket ID: {self.id}")
+                        p.drawCentredString(width - width/4, qr_y - 0.5*inch, f"Ticket ID: {self.id}")
                     except Exception as qr_error:
                         logger.error(f"Could not add QR code to PDF: {str(qr_error)}")
                 
-                # Add footer
-                p.setStrokeColorRGB(0.9, 0.9, 0.9)
-                p.line(inch, inch, width-inch, inch)
+                # Add footer with dotted line to simulate perforation
+                p.setStrokeColor(colors.lightgrey)
+                p.setDash([3, 3], 0)
+                p.line(margin, margin + 1*inch, width - margin, margin + 1*inch)
+                p.setDash([], 0)  # Reset dash pattern
                 
-                p.setFont("Helvetica-Oblique", 9)
-                p.drawString(inch, 0.8*inch, "This ticket is personalized and non-transferrable.")
-                p.drawString(inch, 0.6*inch, "Please present this QR code when you arrive at the event.")
-                p.drawCentredString(width/2, 0.4*inch, "Generated by QR Check-in System")
+                # Add footer text
+                p.setFillColor(colors.grey)
+                p.setFont("Helvetica-Oblique", 10)
+                p.drawString(margin + 0.5*inch, margin + 0.7*inch, 
+                           "This ticket is personalized and non-transferrable.")
+                p.drawString(margin + 0.5*inch, margin + 0.5*inch, 
+                           "Please present this QR code when you arrive at the event.")
+                
+                # Add generation timestamp
+                from datetime import datetime
+                now = datetime.now()
+                date_str = now.strftime("%Y-%m-%d %H:%M:%S")
+                p.setFont("Helvetica", 8)
+                p.drawRightString(width - margin - 0.5*inch, margin + 0.5*inch, f"Generated: {date_str}")
+                
+                # Add company name at bottom
+                p.setFillColor(primary_color)
+                p.setFont("Helvetica-Bold", 10)
+                p.drawCentredString(width/2, margin + 0.2*inch, "QR Check-in System")
                 
                 # Save the PDF
                 p.showPage()
@@ -715,10 +786,10 @@ class Invitation(models.Model):
                 pdf_file = ContentFile(buffer.read())
                 self.ticket_pdf.save(f"ticket-{self.id}.pdf", pdf_file, save=False)
                 
-                logger.info(f"Enhanced PDF ticket generated successfully for invitation {self.id}")
+                logger.info(f"Professional PDF ticket generated successfully for invitation {self.id}")
                 return True
             except Exception as alt_e:
-                logger.error(f"Enhanced PDF generation failed: {str(alt_e)}")
+                logger.error(f"Professional PDF generation failed: {str(alt_e)}")
                 # Try a simpler approach as fallback
                 return self._generate_simple_pdf_ticket()
                 
