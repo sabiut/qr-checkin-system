@@ -28,6 +28,45 @@ class InvitationViewSet(viewsets.ModelViewSet):
         """
         permission_classes = [IsAuthenticated]
         return [permission() for permission in permission_classes]
+        
+    def get_qr_code_html(self, qr_code_data_uri, qr_code_url):
+        """Generate HTML for the QR code with proper styling for all devices"""
+        # Enhanced mobile-friendly styling
+        img_style = (
+            "display: block; "
+            "max-width: 180px; "
+            "width: 100%; "
+            "height: auto; "
+            "margin: 0 auto; "
+            "border: 8px solid white; "
+            "box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1); "
+            "-webkit-box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1); " # Safari support
+            "border-radius: 4px; "
+        )
+        
+        # Add width and height attributes to help email clients with image rendering
+        if qr_code_data_uri:
+            logger.info(f"Using data URI for QR code in email (length: {len(qr_code_data_uri) if qr_code_data_uri else 0})")
+            return f'<img src="{qr_code_data_uri}" width="180" height="180" alt="QR Code" style="{img_style}">'
+        elif qr_code_url:
+            logger.info(f"Using URL for QR code in email: {qr_code_url}")
+            return f'<img src="{qr_code_url}" width="180" height="180" alt="QR Code" style="{img_style}">'
+        else:
+            logger.warning("No QR code available for email")
+            placeholder_style = (
+                "display: block; "
+                "width: 180px; "
+                "height: 180px; "
+                "margin: 0 auto; "
+                "background: #f1f1f1; "
+                "border: 8px solid white; "
+                "box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1); "
+                "text-align: center; "
+                "line-height: 180px; "
+                "color: #888; "
+                "font-size: 14px; "
+            )
+            return f'<div style="{placeholder_style}">(QR code not available)</div>'
     
     def perform_create(self, serializer):
         """Override create to send email with ticket."""
@@ -120,17 +159,34 @@ class InvitationViewSet(viewsets.ModelViewSet):
             with invitation.ticket_html.open('r') as f:
                 html_content = f.read().decode('utf-8')
                 
-            # If this is a direct view (not API), we may need to fix QR code URL
-            # Ensure QR code URLs are absolute in the HTML
-            if invitation.qr_code and invitation.qr_code.url:
-                from django.conf import settings
-                base_url = getattr(settings, 'BASE_URL', 'http://localhost:8000')
-                qr_code_url = invitation.qr_code.url
-                if qr_code_url.startswith('/'):
-                    absolute_qr_url = f"{base_url}{qr_code_url}"
-                    # Replace relative URL with absolute URL in the HTML
-                    html_content = html_content.replace(f'src="{qr_code_url}"', f'src="{absolute_qr_url}"')
-                    
+            # For direct browser viewing, we need to make sure QR code is visible
+            # Try to regenerate and embed QR code directly into the HTML
+            qr_code_data_uri = invitation.get_qr_code_base64()
+            
+            if qr_code_data_uri:
+                logger.info(f"Generated base64 QR code for viewing ticket {invitation.id}")
+                # Try to replace the QR code image with our data URI version
+                if invitation.qr_code and invitation.qr_code.url:
+                    qr_code_url = invitation.qr_code.url
+                    if qr_code_url.startswith('/'):
+                        from django.conf import settings
+                        base_url = getattr(settings, 'BASE_URL', 'http://localhost:8000')
+                        absolute_qr_url = f"{base_url}{qr_code_url}"
+                        # Replace the URL with our data URI
+                        html_content = html_content.replace(f'src="{qr_code_url}"', f'src="{qr_code_data_uri}"')
+                        html_content = html_content.replace(f'src="{absolute_qr_url}"', f'src="{qr_code_data_uri}"')
+            else:
+                # Fallback to making URLs absolute
+                logger.warning(f"Could not generate QR code data URI for ticket {invitation.id}, using URL fallback")
+                if invitation.qr_code and invitation.qr_code.url:
+                    from django.conf import settings
+                    base_url = getattr(settings, 'BASE_URL', 'http://localhost:8000')
+                    qr_code_url = invitation.qr_code.url
+                    if qr_code_url.startswith('/'):
+                        absolute_qr_url = f"{base_url}{qr_code_url}"
+                        # Replace relative URL with absolute URL in the HTML
+                        html_content = html_content.replace(f'src="{qr_code_url}"', f'src="{absolute_qr_url}"')
+                        
             return HttpResponse(html_content)
         return Response({'error': 'Ticket not found'}, status=404)
     
@@ -196,47 +252,123 @@ class InvitationViewSet(viewsets.ModelViewSet):
             Thank you!
             """
             
-            # HTML message with embedded ticket details
+            # Get QR code URL and data URI for embedding in email
+            qr_code_url = None
+            
+            # Use the helper method to get a base64 encoded QR code
+            qr_code_data_uri = invitation.get_qr_code_base64()
+            if qr_code_data_uri:
+                logger.info(f"Successfully created QR code data URI for email for invitation {invitation.id}")
+            else:
+                logger.warning(f"Could not create QR code data URI for email for invitation {invitation.id}")
+            
+            # Always set up URL as fallback
+            if invitation.qr_code:
+                qr_code_url = invitation.qr_code.url
+                if qr_code_url.startswith('/'):
+                    qr_code_url = f"{base_url}{qr_code_url}"
+                logger.info(f"Using fallback QR code URL for email: {qr_code_url}")
+                    
+            # HTML message with embedded ticket
             html_message = f"""
             <html>
             <head>
+                <meta charset="utf-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
                 <style>
-                    body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
-                    .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-                    .header {{ background-color: #4f46e5; color: white; padding: 20px; text-align: center; }}
-                    .content {{ padding: 20px; }}
-                    .footer {{ text-align: center; margin-top: 30px; font-size: 0.8em; color: #666; }}
-                    .button {{ display: inline-block; background-color: #4f46e5; color: white; padding: 10px 20px; 
-                              text-decoration: none; border-radius: 4px; margin-top: 20px; }}
+                    body {{ font-family: 'Helvetica', 'Arial', sans-serif; margin: 0; padding: 0; color: #333; background-color: #f9f9f9; }}
+                    .email-container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                    .email-header {{ background: linear-gradient(135deg, #4f46e5 0%, #2e27c0 100%); color: white; padding: 30px; text-align: center; border-radius: 8px 8px 0 0; }}
+                    .email-header h1 {{ margin: 0; font-size: 24px; font-weight: 700; }}
+                    .email-content {{ background-color: #ffffff; padding: 30px; border-radius: 0 0 8px 8px; }}
+                    .email-footer {{ margin-top: 20px; text-align: center; font-size: 12px; color: #888; }}
+                    .email-greeting {{ margin-bottom: 25px; font-size: 16px; }}
+                    
+                    /* Ticket styles */
+                    .ticket {{ background-color: white; border-radius: 16px; overflow: hidden; box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1); margin: 25px 0; border: 1px solid #e5e5e5; }}
+                    .ticket-header {{ background: linear-gradient(135deg, #4f46e5 0%, #2e27c0 100%); color: white; padding: 20px; text-align: center; }}
+                    .ticket-header h2 {{ margin: 0; font-size: 18px; font-weight: 700; }}
+                    .ticket-header h3 {{ margin: 5px 0 0; font-size: 14px; font-weight: 400; opacity: 0.9; }}
+                    .ticket-content {{ display: flex; flex-direction: column; }}
+                    .ticket-details {{ padding: 20px; }}
+                    .ticket-section {{ margin-bottom: 20px; }}
+                    .ticket-section-title {{ font-size: 14px; text-transform: uppercase; color: #4f46e5; margin: 0 0 10px 0; font-weight: 600; letter-spacing: 1px; border-bottom: 1px solid #f0f0f0; padding-bottom: 5px; }}
+                    .ticket-info-row {{ margin-bottom: 8px; }}
+                    .ticket-info-label {{ font-weight: 600; color: #666; display: inline-block; width: 80px; }}
+                    .ticket-qr {{ padding: 20px; text-align: center; background-color: #f9f9f9; }}
+                    .ticket-qr img {{ max-width: 150px; height: auto; border: 8px solid white; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1); }}
+                    .ticket-instructions {{ font-size: 12px; color: #666; margin-top: 10px; }}
+                    .ticket-id {{ font-size: 11px; color: #999; margin-top: 5px; }}
+                    .ticket-footer {{ background-color: #f8f8f8; padding: 15px; text-align: center; font-size: 11px; color: #888; border-top: 1px solid #eaeaea; }}
                 </style>
             </head>
             <body>
-                <div class="container">
-                    <div class="header">
-                        <h1>Your Ticket is Ready!</h1>
+                <div class="email-container">
+                    <div class="email-header">
+                        <h1>Your Ticket for {event.name}</h1>
                     </div>
-                    <div class="content">
-                        <p>Hello {invitation.guest_name},</p>
+                    <div class="email-content">
+                        <div class="email-greeting">
+                            <p>Hello {invitation.guest_name},</p>
+                            <p>Thank you for registering for <strong>{event.name}</strong>! Your e-ticket is below.</p>
+                        </div>
                         
-                        <p>Your ticket for <strong>{event.name}</strong> is ready!</p>
+                        <!-- Embedded Ticket -->
+                        <div class="ticket">
+                            <div class="ticket-header">
+                                <h2>{event.name}</h2>
+                                <h3>Admission Ticket</h3>
+                            </div>
+                            <div class="ticket-content">
+                                <div class="ticket-details">
+                                    <div class="ticket-section">
+                                        <h4 class="ticket-section-title">Guest Information</h4>
+                                        <div class="ticket-info-row">
+                                            <span class="ticket-info-label">Name:</span>
+                                            <span>{invitation.guest_name}</span>
+                                        </div>
+                                        {f'<div class="ticket-info-row"><span class="ticket-info-label">Email:</span><span>{invitation.guest_email}</span></div>' if invitation.guest_email else ''}
+                                        {f'<div class="ticket-info-row"><span class="ticket-info-label">Phone:</span><span>{invitation.guest_phone}</span></div>' if invitation.guest_phone else ''}
+                                    </div>
+                                    
+                                    <div class="ticket-section">
+                                        <h4 class="ticket-section-title">Event Details</h4>
+                                        <div class="ticket-info-row">
+                                            <span class="ticket-info-label">Date:</span>
+                                            <span>{event.date}</span>
+                                        </div>
+                                        <div class="ticket-info-row">
+                                            <span class="ticket-info-label">Time:</span>
+                                            <span>{event.time}</span>
+                                        </div>
+                                        <div class="ticket-info-row">
+                                            <span class="ticket-info-label">Location:</span>
+                                            <span>{event.location}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="ticket-qr">
+                                    <!-- QR Code Image with improved visibility -->
+                                    {self.get_qr_code_html(qr_code_data_uri, qr_code_url)}
+                                    <div class="ticket-instructions">Scan for check-in</div>
+                                    <div class="ticket-id">Ticket ID: {invitation.id}</div>
+                                </div>
+                                
+                                <div class="ticket-footer">
+                                    <p>Please present this QR code at the venue for quick check-in.</p>
+                                </div>
+                            </div>
+                        </div>
                         
-                        <h2>Event Details:</h2>
-                        <ul>
-                            <li><strong>Date:</strong> {event.date}</li>
-                            <li><strong>Time:</strong> {event.time}</li>
-                            <li><strong>Location:</strong> {event.location}</li>
-                        </ul>
+                        <p>Please save this email and present the QR code at the event entrance for quick check-in.</p>
+                        <p>You can also access your ticket online at: <a href="{ticket_view_url}">{ticket_view_url}</a></p>
                         
-                        <p>You can view your ticket online by clicking the button below:</p>
-                        
-                        <a href="{ticket_view_url}" class="button">View Ticket</a>
-                        
-                        <p>Please bring your ticket with the QR code to the event for quick check-in.</p>
-                        
-                        <p>Thank you!</p>
+                        <p>We look forward to seeing you!</p>
                     </div>
-                    <div class="footer">
+                    <div class="email-footer">
                         <p>This is an automated message from the QR Check-in System.</p>
+                        <p>&copy; 2025 QR Check-in System. All rights reserved.</p>
                     </div>
                 </div>
             </body>
@@ -317,6 +449,47 @@ class InvitationViewSet(viewsets.ModelViewSet):
                 to=[invitation.guest_email],
                 connection=connection,
             )
+            
+            # Try to attach the QR code as a Content-ID (CID) attachment
+            qr_cid = None
+            if invitation.qr_code and hasattr(invitation.qr_code, 'path') and os.path.exists(invitation.qr_code.path):
+                try:
+                    with open(invitation.qr_code.path, 'rb') as f:
+                        qr_image_data = f.read()
+                    
+                    # Generate a Content-ID for the image
+                    qr_cid = f"<qrcode_{invitation.id}@qrticket.app>"
+                    
+                    # Attach the image with the Content-ID
+                    from email.mime.image import MIMEImage
+                    img = MIMEImage(qr_image_data)
+                    img.add_header('Content-ID', qr_cid)
+                    img.add_header('Content-Disposition', 'inline')
+                    email.attach(img)
+                    
+                    logger.info(f"Attached QR code as CID: {qr_cid}")
+                    
+                    # Create a version of HTML with CID image reference
+                    cid_html_message = html_message
+                    
+                    # Replace any QR code references with our CID reference
+                    if qr_code_data_uri:
+                        cid_html_message = cid_html_message.replace(
+                            f'src="{qr_code_data_uri}"', 
+                            f'src="cid:{qr_cid[1:-1]}"'
+                        )
+                    if qr_code_url:
+                        cid_html_message = cid_html_message.replace(
+                            f'src="{qr_code_url}"', 
+                            f'src="cid:{qr_cid[1:-1]}"'
+                        )
+                    
+                    # Use the CID version of the HTML
+                    html_message = cid_html_message
+                    logger.info("Using HTML with CID reference to QR code")
+                except Exception as e:
+                    logger.error(f"Failed to attach QR code as CID: {str(e)}")
+                    # Continue with the original HTML that has data URI or URL
             
             # Attach HTML content
             email.attach_alternative(html_message, "text/html")
@@ -417,47 +590,123 @@ class InvitationViewSet(viewsets.ModelViewSet):
         Thank you!
         """
         
-        # HTML message with embedded ticket details
+        # Get QR code URL and data URI for embedding in email
+        qr_code_url = None
+        
+        # Use the helper method to get a base64 encoded QR code
+        qr_code_data_uri = invitation.get_qr_code_base64()
+        if qr_code_data_uri:
+            logger.info(f"Successfully created QR code data URI for email for invitation {invitation.id}")
+        else:
+            logger.warning(f"Could not create QR code data URI for email for invitation {invitation.id}")
+        
+        # Always set up URL as fallback
+        if invitation.qr_code:
+            qr_code_url = invitation.qr_code.url
+            if qr_code_url.startswith('/'):
+                qr_code_url = f"{base_url}{qr_code_url}"
+            logger.info(f"Using fallback QR code URL for email: {qr_code_url}")
+                
+        # HTML message with embedded ticket
         html_message = f"""
         <html>
         <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <style>
-                body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
-                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-                .header {{ background-color: #4f46e5; color: white; padding: 20px; text-align: center; }}
-                .content {{ padding: 20px; }}
-                .footer {{ text-align: center; margin-top: 30px; font-size: 0.8em; color: #666; }}
-                .button {{ display: inline-block; background-color: #4f46e5; color: white; padding: 10px 20px; 
-                          text-decoration: none; border-radius: 4px; margin-top: 20px; }}
+                body {{ font-family: 'Helvetica', 'Arial', sans-serif; margin: 0; padding: 0; color: #333; background-color: #f9f9f9; }}
+                .email-container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                .email-header {{ background: linear-gradient(135deg, #4f46e5 0%, #2e27c0 100%); color: white; padding: 30px; text-align: center; border-radius: 8px 8px 0 0; }}
+                .email-header h1 {{ margin: 0; font-size: 24px; font-weight: 700; }}
+                .email-content {{ background-color: #ffffff; padding: 30px; border-radius: 0 0 8px 8px; }}
+                .email-footer {{ margin-top: 20px; text-align: center; font-size: 12px; color: #888; }}
+                .email-greeting {{ margin-bottom: 25px; font-size: 16px; }}
+                
+                /* Ticket styles */
+                .ticket {{ background-color: white; border-radius: 16px; overflow: hidden; box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1); margin: 25px 0; border: 1px solid #e5e5e5; }}
+                .ticket-header {{ background: linear-gradient(135deg, #4f46e5 0%, #2e27c0 100%); color: white; padding: 20px; text-align: center; }}
+                .ticket-header h2 {{ margin: 0; font-size: 18px; font-weight: 700; }}
+                .ticket-header h3 {{ margin: 5px 0 0; font-size: 14px; font-weight: 400; opacity: 0.9; }}
+                .ticket-content {{ display: flex; flex-direction: column; }}
+                .ticket-details {{ padding: 20px; }}
+                .ticket-section {{ margin-bottom: 20px; }}
+                .ticket-section-title {{ font-size: 14px; text-transform: uppercase; color: #4f46e5; margin: 0 0 10px 0; font-weight: 600; letter-spacing: 1px; border-bottom: 1px solid #f0f0f0; padding-bottom: 5px; }}
+                .ticket-info-row {{ margin-bottom: 8px; }}
+                .ticket-info-label {{ font-weight: 600; color: #666; display: inline-block; width: 80px; }}
+                .ticket-qr {{ padding: 20px; text-align: center; background-color: #f9f9f9; }}
+                .ticket-qr img {{ max-width: 150px; height: auto; border: 8px solid white; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1); }}
+                .ticket-instructions {{ font-size: 12px; color: #666; margin-top: 10px; }}
+                .ticket-id {{ font-size: 11px; color: #999; margin-top: 5px; }}
+                .ticket-footer {{ background-color: #f8f8f8; padding: 15px; text-align: center; font-size: 11px; color: #888; border-top: 1px solid #eaeaea; }}
             </style>
         </head>
         <body>
-            <div class="container">
-                <div class="header">
-                    <h1>Your Ticket is Ready!</h1>
+            <div class="email-container">
+                <div class="email-header">
+                    <h1>Your Ticket for {event.name}</h1>
                 </div>
-                <div class="content">
-                    <p>Hello {invitation.guest_name},</p>
+                <div class="email-content">
+                    <div class="email-greeting">
+                        <p>Hello {invitation.guest_name},</p>
+                        <p>Thank you for registering for <strong>{event.name}</strong>! Your e-ticket is below.</p>
+                    </div>
                     
-                    <p>Your ticket for <strong>{event.name}</strong> is ready!</p>
+                    <!-- Embedded Ticket -->
+                    <div class="ticket">
+                        <div class="ticket-header">
+                            <h2>{event.name}</h2>
+                            <h3>Admission Ticket</h3>
+                        </div>
+                        <div class="ticket-content">
+                            <div class="ticket-details">
+                                <div class="ticket-section">
+                                    <h4 class="ticket-section-title">Guest Information</h4>
+                                    <div class="ticket-info-row">
+                                        <span class="ticket-info-label">Name:</span>
+                                        <span>{invitation.guest_name}</span>
+                                    </div>
+                                    {f'<div class="ticket-info-row"><span class="ticket-info-label">Email:</span><span>{invitation.guest_email}</span></div>' if invitation.guest_email else ''}
+                                    {f'<div class="ticket-info-row"><span class="ticket-info-label">Phone:</span><span>{invitation.guest_phone}</span></div>' if invitation.guest_phone else ''}
+                                </div>
+                                
+                                <div class="ticket-section">
+                                    <h4 class="ticket-section-title">Event Details</h4>
+                                    <div class="ticket-info-row">
+                                        <span class="ticket-info-label">Date:</span>
+                                        <span>{event.date}</span>
+                                    </div>
+                                    <div class="ticket-info-row">
+                                        <span class="ticket-info-label">Time:</span>
+                                        <span>{event.time}</span>
+                                    </div>
+                                    <div class="ticket-info-row">
+                                        <span class="ticket-info-label">Location:</span>
+                                        <span>{event.location}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="ticket-qr">
+                                <!-- QR Code Image with improved visibility -->
+                                {self.get_qr_code_html(qr_code_data_uri, qr_code_url)}
+                                <div class="ticket-instructions">Scan for check-in</div>
+                                <div class="ticket-id">Ticket ID: {invitation.id}</div>
+                            </div>
+                            
+                            <div class="ticket-footer">
+                                <p>Please present this QR code at the venue for quick check-in.</p>
+                            </div>
+                        </div>
+                    </div>
                     
-                    <h2>Event Details:</h2>
-                    <ul>
-                        <li><strong>Date:</strong> {event.date}</li>
-                        <li><strong>Time:</strong> {event.time}</li>
-                        <li><strong>Location:</strong> {event.location}</li>
-                    </ul>
+                    <p>Please save this email and present the QR code at the event entrance for quick check-in.</p>
+                    <p>You can also access your ticket online at: <a href="{ticket_view_url}">{ticket_view_url}</a></p>
                     
-                    <p>You can view your ticket online by clicking the button below:</p>
-                    
-                    <a href="{ticket_view_url}" class="button">View Ticket</a>
-                    
-                    <p>Please bring your ticket with the QR code to the event for quick check-in.</p>
-                    
-                    <p>Thank you!</p>
+                    <p>We look forward to seeing you!</p>
                 </div>
-                <div class="footer">
+                <div class="email-footer">
                     <p>This is an automated message from the QR Check-in System.</p>
+                    <p>&copy; 2025 QR Check-in System. All rights reserved.</p>
                 </div>
             </div>
         </body>
@@ -481,6 +730,47 @@ class InvitationViewSet(viewsets.ModelViewSet):
                 from_email=settings.DEFAULT_FROM_EMAIL,
                 to=[invitation.guest_email],
             )
+            
+            # Try to attach the QR code as a Content-ID (CID) attachment
+            qr_cid = None
+            if invitation.qr_code and hasattr(invitation.qr_code, 'path') and os.path.exists(invitation.qr_code.path):
+                try:
+                    with open(invitation.qr_code.path, 'rb') as f:
+                        qr_image_data = f.read()
+                    
+                    # Generate a Content-ID for the image
+                    qr_cid = f"<qrcode_{invitation.id}@qrticket.app>"
+                    
+                    # Attach the image with the Content-ID
+                    from email.mime.image import MIMEImage
+                    img = MIMEImage(qr_image_data)
+                    img.add_header('Content-ID', qr_cid)
+                    img.add_header('Content-Disposition', 'inline')
+                    email.attach(img)
+                    
+                    logger.info(f"Attached QR code as CID: {qr_cid}")
+                    
+                    # Create a version of HTML with CID image reference
+                    cid_html_message = html_message
+                    
+                    # Replace any QR code references with our CID reference
+                    if qr_code_data_uri:
+                        cid_html_message = cid_html_message.replace(
+                            f'src="{qr_code_data_uri}"', 
+                            f'src="cid:{qr_cid[1:-1]}"'
+                        )
+                    if qr_code_url:
+                        cid_html_message = cid_html_message.replace(
+                            f'src="{qr_code_url}"', 
+                            f'src="cid:{qr_cid[1:-1]}"'
+                        )
+                    
+                    # Use the CID version of the HTML
+                    html_message = cid_html_message
+                    logger.info("Using HTML with CID reference to QR code")
+                except Exception as e:
+                    logger.error(f"Failed to attach QR code as CID: {str(e)}")
+                    # Continue with the original HTML that has data URI or URL
             
             # Attach HTML content
             logger.info("Attaching HTML content")

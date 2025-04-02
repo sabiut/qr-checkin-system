@@ -2,6 +2,7 @@ from django.db import models
 import uuid
 import qrcode
 import os
+import base64
 from io import BytesIO
 from django.core.files import File
 from PIL import Image, ImageDraw
@@ -103,7 +104,38 @@ class Invitation(models.Model):
         logger.info(f"End of save - Invitation {self.id} - PDF ticket exists? {bool(self.ticket_pdf)}")
     
     def generate_qr_code(self):
-        """Generate QR code for this invitation"""
+        """Generate QR code for this invitation optimized for all devices"""
+        # Use higher error correction for better scanning on various devices
+        # Use a slightly larger box size for better visibility on small screens
+        qr = qrcode.QRCode(
+            version=4,  # Automatically adjust size as needed
+            error_correction=qrcode.constants.ERROR_CORRECT_Q,  # Higher error correction
+            box_size=12,  # Slightly larger boxes for better scanning
+            border=4,     # Standard quiet zone
+        )
+        
+        # Add the invitation ID as data
+        qr.add_data(str(self.id))
+        qr.make(fit=True)
+        
+        # Create a high-contrast QR code
+        img = qr.make_image(fill_color="black", back_color="white")
+        
+        buffer = BytesIO()
+        img.save(buffer, format="PNG")
+        self.qr_code.save(f"qrcode-{self.id}.png", File(buffer), save=False)
+        buffer.close()
+    
+    def get_qr_code_image(self):
+        """Get QR code as a PIL Image object, generating it if needed"""
+        # If we already have a QR code file saved, try to open it
+        if self.qr_code and hasattr(self.qr_code, 'path') and os.path.exists(self.qr_code.path):
+            try:
+                return Image.open(self.qr_code.path)
+            except Exception as e:
+                logger.error(f"Error opening existing QR code: {str(e)}")
+        
+        # If we couldn't load the existing QR code or it doesn't exist, generate a new one
         qr = qrcode.QRCode(
             version=1,
             error_correction=qrcode.constants.ERROR_CORRECT_L,
@@ -113,11 +145,74 @@ class Invitation(models.Model):
         qr.add_data(str(self.id))
         qr.make(fit=True)
         
-        img = qr.make_image(fill_color="black", back_color="white")
-        buffer = BytesIO()
-        img.save(buffer, format="PNG")
-        self.qr_code.save(f"qrcode-{self.id}.png", File(buffer), save=False)
-        buffer.close()
+        # Return the QR code as a PIL Image
+        return qr.make_image(fill_color="black", back_color="white")
+    
+    def get_qr_code_base64(self):
+        """Return the QR code as a base64 data URI."""
+        if not self.qr_code:
+            logger.warning(f"No QR code file exists for invitation {self.id}, generating new one")
+            # Generate a new QR code on the fly
+            try:
+                qr = qrcode.QRCode(
+                    version=4,  # Automatically adjust size as needed
+                    error_correction=qrcode.constants.ERROR_CORRECT_Q,  # Higher error correction
+                    box_size=12,  # Slightly larger boxes for better scanning
+                    border=4,     # Standard quiet zone
+                )
+                qr.add_data(str(self.id))
+                qr.make(fit=True)
+                
+                img = qr.make_image(fill_color="black", back_color="white")
+                buffer = BytesIO()
+                img.save(buffer, format="PNG")
+                buffer.seek(0)
+                encoded_string = base64.b64encode(buffer.read()).decode('utf-8')
+                buffer.close()
+                
+                logger.info(f"Successfully generated new QR code data URI for invitation {self.id}")
+                return f"data:image/png;base64,{encoded_string}"
+            except Exception as e:
+                logger.error(f"Failed to generate new QR code: {str(e)}")
+                return None
+        
+        try:
+            # First try to read directly from the file storage
+            with self.qr_code.open('rb') as f:
+                image_data = f.read()
+                if len(image_data) == 0:
+                    logger.error(f"QR code file for invitation {self.id} is empty")
+                    return None
+                    
+                encoded = base64.b64encode(image_data).decode('utf-8')
+                logger.info(f"Successfully created QR code data URI from storage for invitation {self.id}")
+                return f"data:image/png;base64,{encoded}"
+        except Exception as e:
+            logger.error(f"Failed to read QR code from storage: {str(e)}")
+            
+            # Fall back to generating a new QR code
+            try:
+                qr = qrcode.QRCode(
+                    version=4,  # Automatically adjust size as needed
+                    error_correction=qrcode.constants.ERROR_CORRECT_Q,  # Higher error correction
+                    box_size=12,  # Slightly larger boxes for better scanning
+                    border=4,     # Standard quiet zone
+                )
+                qr.add_data(str(self.id))
+                qr.make(fit=True)
+                
+                img = qr.make_image(fill_color="black", back_color="white")
+                buffer = BytesIO()
+                img.save(buffer, format="PNG")
+                buffer.seek(0)
+                encoded_string = base64.b64encode(buffer.read()).decode('utf-8')
+                buffer.close()
+                
+                logger.info(f"Successfully generated fallback QR code data URI for invitation {self.id}")
+                return f"data:image/png;base64,{encoded_string}"
+            except Exception as e2:
+                logger.error(f"Failed to create fallback QR code: {str(e2)}")
+                return None
         
     def generate_tickets(self):
         """Generate HTML and PDF tickets based on the invitation details"""
@@ -154,16 +249,29 @@ class Invitation(models.Model):
             from django.conf import settings
             base_url = getattr(settings, 'BASE_URL', 'http://localhost:8000')
             
-            # Always make QR code URL absolute
+            # For QR code, we'll use a data URI to embed it directly in the HTML
+            # This ensures it works in emails regardless of server accessibility
+            qr_code_url = None
+            qr_code_data_uri = None
+            
+            # Try to get a data URI for the QR code
+            qr_code_data_uri = self.get_qr_code_base64()
+            if qr_code_data_uri:
+                logger.info(f"Successfully created data URI for QR code for invitation {self.id}")
+            else:
+                logger.warning(f"Failed to create data URI for QR code for invitation {self.id}")
+            
+            # Set up the URL version as fallback
             if self.qr_code:
                 qr_code_url = self.qr_code.url
-                # Always make it absolute to ensure it works in all contexts
                 if qr_code_url.startswith('/'):
                     qr_code_url = f"{base_url}{qr_code_url}"
+                logger.info(f"Using fallback QR code URL: {qr_code_url}")
             else:
-                qr_code_url = None
+                logger.warning(f"No QR code file found for invitation {self.id}")
                 
             logger.info(f"QR code URL for invitation {self.id}: {qr_code_url}")
+            logger.info(f"QR code data URI created: {bool(qr_code_data_uri)}")
                 
             try:
                 # Render HTML ticket from template
@@ -171,6 +279,7 @@ class Invitation(models.Model):
                     'invitation': self,
                     'event': self.event,
                     'qr_code_url': qr_code_url,
+                    'qr_code_data_uri': qr_code_data_uri,
                     'base_url': base_url,
                 }
                 
@@ -183,7 +292,7 @@ class Invitation(models.Model):
                 
                 # Generate a simple HTML ticket without template
                 logger.info(f"Falling back to simple HTML for invitation {self.id}")
-                html_content = self._generate_simple_html_ticket(qr_code_url)
+                html_content = self._generate_simple_html_ticket(qr_code_url, qr_code_data_uri)
             
             # Save the HTML ticket
             logger.info(f"Saving HTML ticket for invitation {self.id}")
@@ -195,61 +304,230 @@ class Invitation(models.Model):
             logger.error(f"Error generating HTML ticket for invitation {self.id}: {str(e)}")
             # Don't re-raise the exception - allow the invitation to be created
     
-    def _generate_simple_html_ticket(self, qr_code_url):
+    def _generate_simple_html_ticket(self, qr_code_url, qr_code_data_uri=None):
         """Generate a simple HTML ticket as fallback when template rendering fails"""
         event = self.event
         
-        # Very simple HTML, no external dependencies
+        # If we have a data URI, use it for the QR code instead of the URL
+        qr_code_html = ""
+        if qr_code_data_uri:
+            qr_code_html = f'<img src="{qr_code_data_uri}" alt="Check-in QR Code">'
+        elif qr_code_url:
+            qr_code_html = f'<img src="{qr_code_url}" alt="Check-in QR Code">'
+        else:
+            qr_code_html = '<div style="padding: 60px; text-align: center; border: 10px solid white; box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1); background: #f1f1f1;">(QR code not available)</div>'
+        
+        # Professional HTML ticket with embedded QR code
         html = f"""<!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Event Ticket - {event.name}</title>
     <style>
-        body {{ font-family: sans-serif; margin: 0; padding: 20px; }}
-        h1, h2, h3 {{ margin-top: 0; }}
-        .ticket {{ border: 1px solid #ccc; padding: 20px; max-width: 600px; margin: 0 auto; }}
-        .header {{ background: #4f46e5; color: white; padding: 10px; text-align: center; }}
-        .section {{ margin-bottom: 20px; }}
-        .footer {{ text-align: center; font-size: 0.8em; color: #666; margin-top: 20px; }}
+        @page {{
+            size: 8.5in 11in;
+            margin: 0.3in;
+        }}
+        body {{
+            font-family: 'Helvetica', 'Arial', sans-serif;
+            margin: 0;
+            padding: 0;
+            color: #333;
+            background-color: #f9f9f9;
+        }}
+        .ticket-container {{
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }}
+        .ticket {{
+            background-color: white;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+            border: 1px solid #e5e5e5;
+        }}
+        .ticket-header {{
+            background: linear-gradient(135deg, #4f46e5 0%, #2e27c0 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+            position: relative;
+        }}
+        .ticket-header h1 {{
+            margin: 0;
+            font-size: 28px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }}
+        .ticket-header h2 {{
+            margin: 5px 0 0;
+            font-size: 18px;
+            font-weight: 400;
+            opacity: 0.9;
+        }}
+        .ticket-content {{
+            display: flex;
+            padding: 0;
+        }}
+        .ticket-info {{
+            flex: 1;
+            padding: 25px;
+            border-right: 1px dashed #e5e5e5;
+        }}
+        .ticket-qr {{
+            width: 230px;
+            padding: 25px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background-color: #f9f9f9;
+        }}
+        .section {{
+            margin-bottom: 25px;
+        }}
+        .section:last-child {{
+            margin-bottom: 0;
+        }}
+        .section-title {{
+            font-size: 16px;
+            text-transform: uppercase;
+            color: #4f46e5;
+            margin: 0 0 15px 0;
+            font-weight: 600;
+            letter-spacing: 1px;
+            border-bottom: 2px solid #f0f0f0;
+            padding-bottom: 8px;
+        }}
+        .info-row {{
+            display: flex;
+            margin-bottom: 10px;
+        }}
+        .info-label {{
+            color: #666;
+            font-weight: 600;
+            width: 90px;
+            flex-shrink: 0;
+        }}
+        .info-value {{
+            color: #333;
+            font-weight: 400;
+        }}
+        .qr-code img {{
+            width: 180px;
+            height: auto;
+            border: 10px solid white;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1);
+        }}
+        .qr-instructions {{
+            margin-top: 15px;
+            text-align: center;
+            font-size: 12px;
+            color: #666;
+        }}
+        .ticket-footer {{
+            background-color: #f8f8f8;
+            padding: 15px 25px;
+            text-align: center;
+            font-size: 12px;
+            color: #888;
+            border-top: 1px solid #eaeaea;
+        }}
+        .ticket-id {{
+            font-size: 12px;
+            margin-top: 10px;
+            color: #999;
+            text-align: center;
+        }}
+        .ticket-design-element {{
+            position: absolute;
+            background-color: rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+        }}
+        .element-1 {{
+            width: 80px;
+            height: 80px;
+            top: -40px;
+            left: -20px;
+        }}
+        .element-2 {{
+            width: 60px;
+            height: 60px;
+            bottom: -30px;
+            right: 40px;
+        }}
+        /* Mobile responsiveness */
+        @media (max-width: 600px) {{
+            .ticket-content {{
+                flex-direction: column;
+            }}
+            .ticket-info {{
+                border-right: none;
+                border-bottom: 1px dashed #e5e5e5;
+            }}
+            .ticket-qr {{
+                width: auto;
+            }}
+        }}
     </style>
 </head>
 <body>
-    <div class="ticket">
-        <div class="header">
-            <h1>{event.name}</h1>
-            <h2>Admission Ticket</h2>
-        </div>
-        
-        <div class="section">
-            <h3>Guest Information</h3>
-            <p><strong>Name:</strong> {self.guest_name}</p>
-            {f'<p><strong>Email:</strong> {self.guest_email}</p>' if self.guest_email else ''}
-            {f'<p><strong>Phone:</strong> {self.guest_phone}</p>' if self.guest_phone else ''}
-        </div>
-        
-        <div class="section">
-            <h3>Event Details</h3>
-            <p><strong>Event Name:</strong> {event.name}</p>
-            <p><strong>Date:</strong> {event.date}</p>
-            <p><strong>Time:</strong> {event.time}</p>
-            <p><strong>Location:</strong> {event.location}</p>
-            {f'<p><strong>Description:</strong> {event.description}</p>' if event.description else ''}
-        </div>
-        
-        <div class="section" style="text-align: center;">
-            <h3>Check-in Code</h3>
-            {f'<img src="{qr_code_url}" alt="Check-in QR Code" style="max-width: 200px;">' if qr_code_url else '<p>(QR code not available)</p>'}
-            <p>Please present this QR code when you arrive at the event.</p>
-        </div>
-        
-        <div style="font-size: 0.8em; text-align: right;">
-            Ticket ID: {self.id}
-        </div>
-        
-        <div class="footer">
-            <p>This ticket is personalized and non-transferrable.</p>
-            <p>Generated by QR Check-in System.</p>
+    <div class="ticket-container">
+        <div class="ticket">
+            <div class="ticket-header">
+                <div class="ticket-design-element element-1"></div>
+                <div class="ticket-design-element element-2"></div>
+                <h1>{event.name}</h1>
+                <h2>Admission Ticket</h2>
+            </div>
+            <div class="ticket-content">
+                <div class="ticket-info">
+                    <div class="section">
+                        <h3 class="section-title">Guest Information</h3>
+                        <div class="info-row">
+                            <span class="info-label">Name:</span>
+                            <span class="info-value">{self.guest_name}</span>
+                        </div>
+                        {f'<div class="info-row"><span class="info-label">Email:</span><span class="info-value">{self.guest_email}</span></div>' if self.guest_email else ''}
+                        {f'<div class="info-row"><span class="info-label">Phone:</span><span class="info-value">{self.guest_phone}</span></div>' if self.guest_phone else ''}
+                    </div>
+                    
+                    <div class="section">
+                        <h3 class="section-title">Event Details</h3>
+                        <div class="info-row">
+                            <span class="info-label">Date:</span>
+                            <span class="info-value">{event.date}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Time:</span>
+                            <span class="info-value">{event.time}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Location:</span>
+                            <span class="info-value">{event.location}</span>
+                        </div>
+                        {f'<div class="info-row"><span class="info-label">Details:</span><span class="info-value">{event.description}</span></div>' if event.description else ''}
+                    </div>
+                </div>
+                <div class="ticket-qr">
+                    <div class="qr-code">
+                        {qr_code_html}
+                    </div>
+                    <div class="qr-instructions">
+                        Scan for check-in
+                    </div>
+                    <div class="ticket-id">
+                        Ticket ID: {self.id}
+                    </div>
+                </div>
+            </div>
+            <div class="ticket-footer">
+                <p>This ticket is personalized and non-transferrable. Please present this QR code when you arrive at the event.</p>
+                <p>Generated by QR Check-in System</p>
+            </div>
         </div>
     </div>
 </body>
