@@ -12,33 +12,78 @@ from .serializers import InvitationSerializer
 from events.models import Event
 import logging
 import os
+import smtplib
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
 class InvitationViewSet(viewsets.ModelViewSet):
     queryset = Invitation.objects.all()
     serializer_class = InvitationSerializer
-    permission_classes = [AllowAny]  # Allow public access for this demo
+    permission_classes = [IsAuthenticated]  # Default to authenticated users only
+    
+    def get_permissions(self):
+        """
+        - Require authentication for all invitation operations including viewing tickets
+        """
+        permission_classes = [IsAuthenticated]
+        return [permission() for permission in permission_classes]
     
     def perform_create(self, serializer):
         """Override create to send email with ticket."""
         invitation = serializer.save()
+        logger.info(f"Created invitation {invitation.id}")
         
         # Wait for tickets to be generated
         # At this point, save() in the model should have generated the tickets
         if invitation.guest_email:
+            logger.info(f"Invitation has email ({invitation.guest_email}), sending email...")
+            
+            # Make sure tickets are generated before trying to send email
+            if not invitation.ticket_html or not invitation.ticket_pdf:
+                logger.info(f"Tickets not found for invitation {invitation.id}, generating them now")
+                try:
+                    invitation.generate_tickets()
+                    invitation.save()
+                    logger.info(f"Tickets generated for invitation {invitation.id}")
+                except Exception as e:
+                    logger.error(f"Failed to generate tickets for invitation {invitation.id}: {str(e)}")
+            
+            # Now try to send the email
             try:
-                self.send_invitation_email(invitation)
+                # Use the existing endpoint to send the email
+                self.get_object = lambda: invitation  # Temporarily set get_object to return our invitation
+                response = self.send_email(request=None, pk=invitation.id)
+                if response.status_code >= 400:
+                    logger.error(f"Failed to send email: {response.data}")
+                else:
+                    logger.info(f"Email sent successfully to {invitation.guest_email}")
             except Exception as e:
                 logger.error(f"Failed to send invitation email: {str(e)}")
+                import traceback
+                logger.error(traceback.format_exc())
                 
         return invitation
     
     def get_queryset(self):
-        queryset = Invitation.objects.all()
+        """
+        Filter invitations to only show those for events the user owns,
+        or all invitations if the user is staff
+        """
+        user = self.request.user
+        
+        # Staff can see all invitations
+        if user.is_staff:
+            queryset = Invitation.objects.all()
+        else:
+            # Regular users can only see invitations for events they own
+            queryset = Invitation.objects.filter(event__owner=user)
+            
+        # Filter by event_id if provided
         event_id = self.request.query_params.get('event_id')
         if event_id:
             queryset = queryset.filter(event_id=event_id)
+            
         return queryset
     
     @action(detail=True, methods=['get'])
@@ -98,12 +143,231 @@ class InvitationViewSet(viewsets.ModelViewSet):
                 {'error': 'Invitation has no email address'},
                 status=status.HTTP_400_BAD_REQUEST
             )
+        
+        logger.info(f"Manual email request for invitation {invitation.id} to {invitation.guest_email}")
+        
+        # Check if we have ticket files
+        if not invitation.ticket_html and not invitation.ticket_pdf:
+            logger.info(f"No tickets found for invitation {invitation.id}, generating them now")
+            try:
+                invitation.generate_tickets()
+                invitation.save()
+                logger.info(f"Tickets generated for invitation {invitation.id}")
+            except Exception as e:
+                logger.error(f"Failed to generate tickets for invitation {invitation.id}: {str(e)}")
+        
+        # Verify email configuration
+        if settings.EMAIL_BACKEND == 'django.core.mail.backends.smtp.EmailBackend':
+            if not settings.EMAIL_HOST or not settings.EMAIL_HOST_USER or not settings.EMAIL_HOST_PASSWORD:
+                error_msg = "SMTP email settings are incomplete. Check EMAIL_HOST, EMAIL_HOST_USER, and EMAIL_HOST_PASSWORD."
+                logger.error(error_msg)
+                return Response(
+                    {'error': error_msg},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
             
         try:
-            self.send_invitation_email(invitation)
-            return Response({'message': 'Invitation email sent successfully'})
+            # Get the event details
+            event = invitation.event
+            
+            # Build base URL for links - using a default for development
+            base_url = settings.BASE_URL if hasattr(settings, 'BASE_URL') else "http://localhost:8000"
+            
+            # Get ticket URLs
+            ticket_view_url = f"{base_url}/tickets/{invitation.id}/"
+            
+            # Email subject
+            subject = f"Your Ticket for {event.name}"
+            
+            # Plain text message
+            message = f"""
+            Hello {invitation.guest_name},
+            
+            Your ticket for {event.name} is ready.
+            
+            Event Details:
+            - Date: {event.date}
+            - Time: {event.time}
+            - Location: {event.location}
+            
+            Please bring your ticket with the QR code to the event for quick check-in.
+            You can view your ticket online at: {ticket_view_url}
+            
+            Thank you!
+            """
+            
+            # HTML message with embedded ticket details
+            html_message = f"""
+            <html>
+            <head>
+                <style>
+                    body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+                    .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                    .header {{ background-color: #4f46e5; color: white; padding: 20px; text-align: center; }}
+                    .content {{ padding: 20px; }}
+                    .footer {{ text-align: center; margin-top: 30px; font-size: 0.8em; color: #666; }}
+                    .button {{ display: inline-block; background-color: #4f46e5; color: white; padding: 10px 20px; 
+                              text-decoration: none; border-radius: 4px; margin-top: 20px; }}
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="header">
+                        <h1>Your Ticket is Ready!</h1>
+                    </div>
+                    <div class="content">
+                        <p>Hello {invitation.guest_name},</p>
+                        
+                        <p>Your ticket for <strong>{event.name}</strong> is ready!</p>
+                        
+                        <h2>Event Details:</h2>
+                        <ul>
+                            <li><strong>Date:</strong> {event.date}</li>
+                            <li><strong>Time:</strong> {event.time}</li>
+                            <li><strong>Location:</strong> {event.location}</li>
+                        </ul>
+                        
+                        <p>You can view your ticket online by clicking the button below:</p>
+                        
+                        <a href="{ticket_view_url}" class="button">View Ticket</a>
+                        
+                        <p>Please bring your ticket with the QR code to the event for quick check-in.</p>
+                        
+                        <p>Thank you!</p>
+                    </div>
+                    <div class="footer">
+                        <p>This is an automated message from the QR Check-in System.</p>
+                    </div>
+                </div>
+            </body>
+            </html>
+            """
+            
+            # Log email settings
+            logger.info(f"Email settings for manual send - Backend: {settings.EMAIL_BACKEND}")
+            logger.info(f"Email settings for manual send - Host: {settings.EMAIL_HOST}")
+            logger.info(f"Email settings for manual send - Port: {settings.EMAIL_PORT}")
+            logger.info(f"Email settings for manual send - TLS: {settings.EMAIL_USE_TLS}")
+            logger.info(f"Email settings for manual send - User: {settings.EMAIL_HOST_USER}")
+            logger.info(f"Email settings for manual send - From: {settings.DEFAULT_FROM_EMAIL}")
+            
+            # Verify needed settings before proceeding
+            if settings.EMAIL_BACKEND == 'django.core.mail.backends.smtp.EmailBackend':
+                # Check all required SMTP settings are present
+                missing_settings = []
+                if not settings.EMAIL_HOST:
+                    missing_settings.append("EMAIL_HOST")
+                if not settings.EMAIL_PORT:
+                    missing_settings.append("EMAIL_PORT")
+                if not settings.EMAIL_HOST_USER:
+                    missing_settings.append("EMAIL_HOST_USER")
+                if not settings.EMAIL_HOST_PASSWORD:
+                    missing_settings.append("EMAIL_HOST_PASSWORD")
+                
+                if missing_settings:
+                    error_msg = f"Missing required SMTP settings: {', '.join(missing_settings)}"
+                    logger.error(error_msg)
+                    return Response(
+                        {'error': error_msg},
+                        status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                    )
+            
+            # Try creating a direct SMTP connection to validate credentials
+            if settings.EMAIL_BACKEND == 'django.core.mail.backends.smtp.EmailBackend':
+                try:
+                    logger.info("Testing direct SMTP connection before sending...")
+                    server = smtplib.SMTP(settings.EMAIL_HOST, settings.EMAIL_PORT)
+                    server.set_debuglevel(1)  # Verbose logging
+                    
+                    if settings.EMAIL_USE_TLS:
+                        server.starttls()
+                        
+                    if settings.EMAIL_HOST_USER and settings.EMAIL_HOST_PASSWORD:
+                        server.login(settings.EMAIL_HOST_USER, settings.EMAIL_HOST_PASSWORD)
+                        
+                    server.quit()
+                    logger.info("Direct SMTP connection successful.")
+                except Exception as smtp_test_error:
+                    error_msg = f"Failed to connect to SMTP server: {str(smtp_test_error)}"
+                    logger.error(error_msg)
+                    return Response(
+                        {'error': error_msg},
+                        status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                    )
+                    
+            # Now create the Django connection
+            from django.core.mail import get_connection
+            logger.info("Creating Django email connection...")
+            connection = get_connection(
+                backend=settings.EMAIL_BACKEND,
+                host=settings.EMAIL_HOST,
+                port=settings.EMAIL_PORT,
+                username=settings.EMAIL_HOST_USER,
+                password=settings.EMAIL_HOST_PASSWORD,
+                use_tls=settings.EMAIL_USE_TLS,
+                fail_silently=False,
+            )
+            
+            # Create the email message
+            from django.core.mail import EmailMultiAlternatives
+            email = EmailMultiAlternatives(
+                subject=subject,
+                body=message,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                to=[invitation.guest_email],
+                connection=connection,
+            )
+            
+            # Attach HTML content
+            email.attach_alternative(html_message, "text/html")
+            
+            # PDF ticket attachment was removed to simplify email sending
+            logger.info("PDF attachment is disabled to avoid potential issues")
+            
+            # HTML ticket attachment was removed to simplify email sending
+            logger.info("HTML attachment is disabled to avoid potential issues")
+            
+            # Send the email
+            logger.info(f"Sending email to {invitation.guest_email}...")
+            logger.info(f"Email connection: {email.connection}")
+            logger.info(f"Email subject: {email.subject}")
+            logger.info(f"Email from: {email.from_email}")
+            logger.info(f"Email to: {email.to}")
+            
+            try:
+                result = email.send(fail_silently=False)
+                logger.info(f"Email send result: {result}")
+                
+                # Log more details about the SMTP server response if available
+                if hasattr(email.connection, 'last_response'):
+                    logger.info(f"SMTP server last response: {email.connection.last_response}")
+            except Exception as send_error:
+                logger.error(f"Exception during email.send(): {str(send_error)}")
+                # Re-raise to be caught by the outer try-except
+                raise
+            
+            return Response({'message': f'Invitation email sent successfully to {invitation.guest_email}'})
+            
+        except smtplib.SMTPAuthenticationError as e:
+            error_msg = f"SMTP Authentication Error: {str(e)}"
+            logger.error(error_msg)
+            logger.error("This is likely due to incorrect username/password or Gmail security settings.")
+            logger.error("For Gmail, make sure you're using an App Password if 2FA is enabled.")
+            return Response(
+                {'error': error_msg},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        except smtplib.SMTPException as e:
+            error_msg = f"SMTP Error: {str(e)}"
+            logger.error(error_msg)
+            return Response(
+                {'error': error_msg},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
         except Exception as e:
             logger.error(f"Failed to send invitation email: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
             return Response(
                 {'error': f'Failed to send email: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -130,11 +394,17 @@ class InvitationViewSet(viewsets.ModelViewSet):
         # Email subject
         subject = f"Your Ticket for {event.name}"
         
+        # Verify email config is set
+        if not settings.EMAIL_HOST or not settings.EMAIL_HOST_USER or not settings.EMAIL_HOST_PASSWORD:
+            logger.warning("Email configuration is incomplete. Check EMAIL_HOST, EMAIL_HOST_USER, and EMAIL_HOST_PASSWORD settings.")
+            if settings.EMAIL_BACKEND == 'django.core.mail.backends.smtp.EmailBackend':
+                logger.warning("Using SMTP backend but credentials are missing. Email may fail to send.")
+        
         # Plain text message
         message = f"""
         Hello {invitation.guest_name},
         
-        Your ticket for {event.name} is attached.
+        Your ticket for {event.name} is ready.
         
         Event Details:
         - Date: {event.date}
@@ -142,7 +412,7 @@ class InvitationViewSet(viewsets.ModelViewSet):
         - Location: {event.location}
         
         Please bring your ticket with the QR code to the event for quick check-in.
-        You can also view your ticket online at: {ticket_view_url}
+        You can view your ticket online at: {ticket_view_url}
         
         Thank you!
         """
@@ -178,9 +448,7 @@ class InvitationViewSet(viewsets.ModelViewSet):
                         <li><strong>Location:</strong> {event.location}</li>
                     </ul>
                     
-                    <p>Your ticket is attached to this email as a PDF.</p>
-                    
-                    <p>You can also view your ticket online:</p>
+                    <p>You can view your ticket online by clicking the button below:</p>
                     
                     <a href="{ticket_view_url}" class="button">View Ticket</a>
                     
@@ -218,26 +486,51 @@ class InvitationViewSet(viewsets.ModelViewSet):
             logger.info("Attaching HTML content")
             email.attach_alternative(html_message, "text/html")
             
-            # Attach PDF ticket if available
-            if invitation.ticket_pdf:
-                if os.path.exists(invitation.ticket_pdf.path):
-                    logger.info(f"Attaching PDF ticket: {invitation.ticket_pdf.path}")
-                    email.attach_file(invitation.ticket_pdf.path)
-                else:
-                    logger.warning(f"PDF file doesn't exist at path: {invitation.ticket_pdf.path}")
-            else:
-                logger.warning("No PDF ticket available to attach")
-                
-            # Attach HTML ticket as a file too
-            if invitation.ticket_html and os.path.exists(invitation.ticket_html.path):
-                logger.info(f"Attaching HTML ticket: {invitation.ticket_html.path}")
-                email.attach_file(invitation.ticket_html.path)
+            # PDF ticket attachment was removed to simplify email sending
+            logger.info("PDF attachment is disabled to avoid potential issues")
+            
+            # HTML ticket attachment was removed to simplify email sending
+            logger.info("HTML attachment is disabled to avoid potential issues")
                 
             # Send email
             logger.info("Sending email...")
+            
+            # Add debugging information for connection
+            if email.connection:
+                try:
+                    connection_debug = email.connection.open()
+                    logger.info(f"Email connection opened: {connection_debug}")
+                except Exception as conn_err:
+                    logger.error(f"Error opening email connection: {str(conn_err)}")
+            else:
+                logger.error("Email connection is None. Creating a new connection.")
+                from django.core.mail import get_connection
+                email.connection = get_connection(
+                    backend=settings.EMAIL_BACKEND,
+                    host=settings.EMAIL_HOST,
+                    port=settings.EMAIL_PORT,
+                    username=settings.EMAIL_HOST_USER,
+                    password=settings.EMAIL_HOST_PASSWORD,
+                    use_tls=settings.EMAIL_USE_TLS,
+                )
+            
             result = email.send()
             logger.info(f"Email send result: {result}")
             return True
+        except smtplib.SMTPAuthenticationError as e:
+            logger.error(f"SMTP Authentication Error: {str(e)}")
+            logger.error("This is likely due to incorrect username/password or Gmail security settings.")
+            logger.error("For Gmail, make sure you're using an App Password if 2FA is enabled.")
+            logger.error("Check: https://myaccount.google.com/apppasswords")
+            import traceback
+            logger.error(traceback.format_exc())
+            raise
+        except smtplib.SMTPException as e:
+            logger.error(f"SMTP Error: {str(e)}")
+            logger.error("This could be due to incorrect host/port or network connectivity issues.")
+            import traceback
+            logger.error(traceback.format_exc())
+            raise
         except Exception as e:
             logger.error(f"Error sending email: {str(e)}")
             import traceback
@@ -287,6 +580,12 @@ class InvitationViewSet(viewsets.ModelViewSet):
 @csrf_exempt
 def debug_ticket_generation(request, invitation_id):
     """Debug endpoint to test ticket generation for an invitation"""
+    # Check if user is authenticated
+    if not request.user.is_authenticated:
+        return JsonResponse({
+            'success': False,
+            'error': 'Authentication required'
+        }, status=401)
     logger.info(f"Debug ticket generation called for invitation {invitation_id}")
     
     try:
@@ -341,9 +640,104 @@ def debug_ticket_generation(request, invitation_id):
         
         
 @api_view(['POST'])
+def simple_test_email(request):
+    """Super simple email test without any attachments or complex logic"""
+    # Check if user is authenticated
+    if not request.user.is_authenticated:
+        return JsonResponse({
+            'success': False,
+            'error': 'Authentication required'
+        }, status=401)
+    # Get the test email from request or use a default
+    email = request.data.get('email', None)
+    if not email:
+        return JsonResponse({
+            'success': False,
+            'error': 'Email address is required'
+        }, status=400)
+    
+    logger.info(f"Simple test email requested for {email}")
+    
+    # Log email settings for debugging
+    logger.info("=================== EMAIL SETTINGS ===================")
+    logger.info(f"EMAIL_BACKEND: {settings.EMAIL_BACKEND}")
+    logger.info(f"EMAIL_HOST: {settings.EMAIL_HOST}")
+    logger.info(f"EMAIL_PORT: {settings.EMAIL_PORT}")
+    logger.info(f"EMAIL_USE_TLS: {settings.EMAIL_USE_TLS}")
+    logger.info(f"EMAIL_HOST_USER: {settings.EMAIL_HOST_USER}")
+    logger.info(f"EMAIL_HOST_PASSWORD: {'*****' if settings.EMAIL_HOST_PASSWORD else 'NOT SET'}")
+    logger.info(f"DEFAULT_FROM_EMAIL: {settings.DEFAULT_FROM_EMAIL}")
+    logger.info("====================================================")
+    
+    try:
+        # Create a simple email message
+        from django.core.mail import EmailMessage
+        
+        # Create a direct connection
+        from django.core.mail import get_connection
+        connection = get_connection(
+            backend=settings.EMAIL_BACKEND,
+            host=settings.EMAIL_HOST,
+            port=settings.EMAIL_PORT,
+            username=settings.EMAIL_HOST_USER,
+            password=settings.EMAIL_HOST_PASSWORD,
+            use_tls=settings.EMAIL_USE_TLS,
+            fail_silently=False,
+        )
+        
+        # Try to open the connection explicitly
+        try:
+            connection.open()
+            logger.info("Connection opened successfully")
+        except Exception as conn_error:
+            logger.error(f"Error opening connection: {str(conn_error)}")
+            return JsonResponse({
+                'success': False,
+                'error': f'Failed to connect to mail server: {str(conn_error)}'
+            }, status=500)
+        
+        # Create and send the message
+        subject = "Test Email from QR Check-in System"
+        body = f"This is a test email sent at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}."
+        email_msg = EmailMessage(
+            subject=subject,
+            body=body,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to=[email],
+            connection=connection,
+        )
+        
+        # Try to send
+        logger.info(f"Sending simple test email to {email}...")
+        result = email_msg.send(fail_silently=False)
+        logger.info(f"Email sent result: {result}")
+        
+        # Finally close the connection
+        connection.close()
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'Simple test email sent to {email}'
+        })
+    except Exception as e:
+        logger.error(f"Error in simple test email: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+@api_view(['POST'])
 @csrf_exempt
 def test_email_delivery(request, invitation_id):
     """Test endpoint to send an invitation email with ticket attachments"""
+    # Check if user is authenticated
+    if not request.user.is_authenticated:
+        return JsonResponse({
+            'success': False,
+            'error': 'Authentication required'
+        }, status=401)
     logger.info(f"Test email delivery called for invitation {invitation_id}")
     
     # Get the test email from request or use a default

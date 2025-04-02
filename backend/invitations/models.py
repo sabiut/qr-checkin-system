@@ -1,18 +1,16 @@
 from django.db import models
 import uuid
 import qrcode
+import os
 from io import BytesIO
 from django.core.files import File
 from PIL import Image, ImageDraw
-# Import weasyprint conditionally to avoid errors when it's not installed
-try:
-    import weasyprint
-    WEASYPRINT_AVAILABLE = True
-except ImportError:
-    WEASYPRINT_AVAILABLE = False
 from django.template.loader import render_to_string
 from django.core.files.base import ContentFile
 import logging
+
+# We're deliberately not importing WeasyPrint due to compatibility issues
+# Instead, we use ReportLab for PDF generation
 
 logger = logging.getLogger(__name__)
 
@@ -133,7 +131,12 @@ class Invitation(models.Model):
         # Then generate PDF ticket (from the HTML)
         if self.ticket_format in [TicketFormat.PDF, TicketFormat.BOTH]:
             logger.info(f"Generating PDF ticket for invitation {self.id}")
-            self.generate_pdf_ticket()
+            try:
+                self.generate_pdf_ticket()
+            except Exception as e:
+                logger.error(f"Failed to generate PDF ticket, but continuing: {str(e)}")
+                # PDF generation failure shouldn't stop the process
+                pass
             
         logger.info(f"Completed ticket generation for invitation {self.id}")
             
@@ -256,99 +259,74 @@ class Invitation(models.Model):
     def generate_pdf_ticket(self):
         """Generate a PDF ticket from the HTML ticket"""
         try:
-            # Skip if WeasyPrint isn't available
-            if not WEASYPRINT_AVAILABLE:
-                logger.warning("WeasyPrint not available, skipping PDF ticket generation")
-                return
+            # Skip WeasyPrint entirely due to compatibility issues
+            logger.info("Skipping WeasyPrint PDF generation due to known compatibility issues")
+            logger.info("Using ReportLab for PDF generation instead")
                 
             if not self.ticket_html:
                 self.generate_html_ticket()
                 
             if not self.ticket_html:
                 return
-                
-            # Use WeasyPrint to convert HTML to PDF
+            
+            # Skip directly to the ReportLab approach for reliability
             try:
-                # We need the HTML content
-                with self.ticket_html.open('r') as f:
-                    # Read as string without decoding
-                    html_content = f.read()
-                    
-                    # If it's bytes, decode it; if it's already a string, use it directly
-                    if isinstance(html_content, bytes):
-                        html_content = html_content.decode('utf-8')
-                    
-                # Create PDF
-                # Fix base URL for images
-                base_url = os.path.dirname(self.ticket_html.path)
-                pdf = weasyprint.HTML(string=html_content, base_url=base_url).write_pdf()
+                logger.info("Using ReportLab for PDF generation")
+                from reportlab.pdfgen import canvas
+                from reportlab.lib.pagesizes import letter
+                from io import BytesIO
                 
-                # Save the PDF ticket
-                pdf_file = ContentFile(pdf)
+                buffer = BytesIO()
+                p = canvas.Canvas(buffer, pagesize=letter)
+                
+                # Add content to the PDF
+                p.setFont("Helvetica-Bold", 16)
+                p.drawString(100, 750, f"Event Ticket: {self.event.name}")
+                
+                p.setFont("Helvetica-Bold", 12)
+                p.drawString(100, 700, "Guest Information:")
+                p.setFont("Helvetica", 12)
+                p.drawString(120, 680, f"Name: {self.guest_name}")
+                if self.guest_email:
+                    p.drawString(120, 660, f"Email: {self.guest_email}")
+                if self.guest_phone:
+                    p.drawString(120, 640, f"Phone: {self.guest_phone}")
+                
+                p.setFont("Helvetica-Bold", 12)
+                p.drawString(100, 600, "Event Details:")
+                p.setFont("Helvetica", 12)
+                p.drawString(120, 580, f"Date: {self.event.date}")
+                p.drawString(120, 560, f"Time: {self.event.time}")
+                p.drawString(120, 540, f"Location: {self.event.location}")
+                
+                p.setFont("Helvetica-Bold", 12)
+                p.drawString(100, 500, "Ticket ID:")
+                p.setFont("Helvetica", 12)
+                p.drawString(120, 480, f"{self.id}")
+                
+                # If QR code exists, try to add it
+                if self.qr_code and os.path.exists(self.qr_code.path):
+                    try:
+                        from reportlab.lib.utils import ImageReader
+                        p.drawImage(ImageReader(self.qr_code.path), 250, 300, width=100, height=100)
+                    except Exception as qr_error:
+                        logger.error(f"Could not add QR code to PDF: {str(qr_error)}")
+                
+                p.setFont("Helvetica-Oblique", 10)
+                p.drawString(100, 200, "Please bring this ticket with you to the event.")
+                p.drawString(100, 180, "This ticket is personalized and non-transferrable.")
+                
+                p.showPage()
+                p.save()
+                
+                buffer.seek(0)
+                pdf_file = ContentFile(buffer.read())
                 self.ticket_pdf.save(f"ticket-{self.id}.pdf", pdf_file, save=False)
                 
-                logger.info(f"PDF ticket generated successfully for invitation {self.id}")
-            except Exception as inner_e:
-                logger.error(f"Error processing HTML to PDF: {str(inner_e)}")
-                
-                # Alternative approach: generate a simpler PDF directly
-                try:
-                    logger.info("Trying alternative PDF generation approach")
-                    from reportlab.pdfgen import canvas
-                    from reportlab.lib.pagesizes import letter
-                    from io import BytesIO
-                    
-                    buffer = BytesIO()
-                    p = canvas.Canvas(buffer, pagesize=letter)
-                    
-                    # Add content to the PDF
-                    p.setFont("Helvetica-Bold", 16)
-                    p.drawString(100, 750, f"Event Ticket: {self.event.name}")
-                    
-                    p.setFont("Helvetica-Bold", 12)
-                    p.drawString(100, 700, "Guest Information:")
-                    p.setFont("Helvetica", 12)
-                    p.drawString(120, 680, f"Name: {self.guest_name}")
-                    if self.guest_email:
-                        p.drawString(120, 660, f"Email: {self.guest_email}")
-                    if self.guest_phone:
-                        p.drawString(120, 640, f"Phone: {self.guest_phone}")
-                    
-                    p.setFont("Helvetica-Bold", 12)
-                    p.drawString(100, 600, "Event Details:")
-                    p.setFont("Helvetica", 12)
-                    p.drawString(120, 580, f"Date: {self.event.date}")
-                    p.drawString(120, 560, f"Time: {self.event.time}")
-                    p.drawString(120, 540, f"Location: {self.event.location}")
-                    
-                    p.setFont("Helvetica-Bold", 12)
-                    p.drawString(100, 500, "Ticket ID:")
-                    p.setFont("Helvetica", 12)
-                    p.drawString(120, 480, f"{self.id}")
-                    
-                    # If QR code exists, try to add it
-                    if self.qr_code and os.path.exists(self.qr_code.path):
-                        try:
-                            from reportlab.lib.utils import ImageReader
-                            p.drawImage(ImageReader(self.qr_code.path), 250, 300, width=100, height=100)
-                        except Exception as qr_error:
-                            logger.error(f"Could not add QR code to PDF: {str(qr_error)}")
-                    
-                    p.setFont("Helvetica-Oblique", 10)
-                    p.drawString(100, 200, "Please bring this ticket with you to the event.")
-                    p.drawString(100, 180, "This ticket is personalized and non-transferrable.")
-                    
-                    p.showPage()
-                    p.save()
-                    
-                    buffer.seek(0)
-                    pdf_file = ContentFile(buffer.read())
-                    self.ticket_pdf.save(f"ticket-simple-{self.id}.pdf", pdf_file, save=False)
-                    
-                    logger.info(f"Alternative PDF ticket generated successfully for invitation {self.id}")
-                except Exception as alt_e:
-                    logger.error(f"Alternative PDF generation also failed: {str(alt_e)}")
-                    raise
+                logger.info(f"ReportLab PDF ticket generated successfully for invitation {self.id}")
+            except Exception as alt_e:
+                logger.error(f"ReportLab PDF generation failed: {str(alt_e)}")
+                raise
                 
         except Exception as e:
             # Log the error but don't prevent the invite from being created

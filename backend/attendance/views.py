@@ -15,13 +15,27 @@ logger = logging.getLogger(__name__)
 class AttendanceViewSet(viewsets.ModelViewSet):
     queryset = Attendance.objects.all()
     serializer_class = AttendanceSerializer
-    permission_classes = [AllowAny]  # Allow public access for this demo
+    permission_classes = [IsAuthenticated]  # Require authentication
     
     def get_queryset(self):
-        queryset = Attendance.objects.all()
+        """
+        Filter attendance records to only show those for events the user owns,
+        or all records if the user is staff
+        """
+        user = self.request.user
+        
+        # Staff can see all attendance records
+        if user.is_staff:
+            queryset = Attendance.objects.all()
+        else:
+            # Regular users can only see attendance for events they own
+            queryset = Attendance.objects.filter(invitation__event__owner=user)
+            
+        # Filter by event_id if provided
         event_id = self.request.query_params.get('event_id')
         if event_id:
             queryset = queryset.filter(invitation__event_id=event_id)
+            
         return queryset
     
     @action(detail=False, methods=['post'])

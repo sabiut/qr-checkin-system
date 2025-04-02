@@ -11,10 +11,21 @@ logger = logging.getLogger(__name__)
 
 class EventViewSet(viewsets.ModelViewSet):
     serializer_class = EventSerializer
-    permission_classes = [IsAuthenticated]
+    
+    def get_permissions(self):
+        """
+        - Require authentication for all event operations including viewing
+        """
+        permission_classes = [IsAuthenticated]
+        return [permission() for permission in permission_classes]
     
     def get_queryset(self):
-        """Return events filtered by owner or all events for staff users"""
+        """
+        Return:
+        - All events for staff users
+        - Only owned events for regular authenticated users
+        """
+        # All users must be authenticated now
         user = self.request.user
         if user.is_staff:
             return Event.objects.all()
