@@ -138,7 +138,7 @@ export default function Home() {
     },
     {
       title: "Seamless Integrations",
-      description: "Connect with your existing tools like Mailchimp, Salesforce, or Google Sheets for workflow automation.",
+      description: "Connect with your existing tools like Mailchimp, Google Sheets, or other platforms for workflow automation.",
       icon: (
         <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z" />
@@ -158,8 +158,8 @@ export default function Home() {
       author: "Sarah Johnson",
       role: "Conference Director",
       company: "TechSummit",
-      image: "/api/placeholder/72/72",
-      logo: "/api/placeholder/40/20",
+      image: "",
+      logo: "",
       metrics: {
         attendees: "1,200+",
         timeSaved: "4.5 hours",
@@ -171,8 +171,8 @@ export default function Home() {
       author: "Michael Chen",
       role: "Event Coordinator",
       company: "Global Marketing Forum",
-      image: "/api/placeholder/72/72",
-      logo: "/api/placeholder/40/20",
+      image: "",
+      logo: "",
       metrics: {
         attendees: "800+",
         timeSaved: "3 hours",
@@ -184,8 +184,8 @@ export default function Home() {
       author: "Jessica Williams",
       role: "Corporate Events Manager",
       company: "Enterprise Solutions Inc.",
-      image: "/api/placeholder/72/72",
-      logo: "/api/placeholder/40/20",
+      image: "",
+      logo: "",
       metrics: {
         attendees: "500+",
         timeSaved: "2.5 hours",
@@ -286,7 +286,7 @@ export default function Home() {
   );
 
   // Testimonial component
-  const Testimonial = ({ quote, author, role, company, image, logo, metrics }: TestimonialProps) => (
+  const Testimonial = ({ quote, author, role, company, logo, metrics }: TestimonialProps) => (
     <div className="bg-white rounded-xl p-6 shadow-md border border-gray-100 hover:shadow-lg transition-shadow">
       <div className="flex mb-4 text-yellow-400">
         {[...Array(5)].map((_, i) => (
@@ -300,11 +300,11 @@ export default function Home() {
       
       <div className="flex items-center justify-between">
         <div className="flex items-center">
-          <img 
-            src={image || "/api/placeholder/40/40"}
-            alt={author}
-            className="w-10 h-10 rounded-full object-cover mr-3"
-          />
+          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center mr-3">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+            </svg>
+          </div>
           <div>
             <p className="font-semibold text-gray-800">{author}</p>
             <p className="text-gray-500 text-sm">{role}</p>
@@ -1070,7 +1070,6 @@ export default function Home() {
                     author={testimonial.author}
                     role={testimonial.role}
                     company={testimonial.company}
-                    image={testimonial.image}
                     logo={testimonial.logo}
                   />
                 </div>
@@ -1179,7 +1178,7 @@ export default function Home() {
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                 </svg>
-                <span>Contact Sales</span>
+                <span>Contact Us</span>
               </Link>
             </div>
             
@@ -1187,7 +1186,7 @@ export default function Home() {
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              <span>No credit card required • Free 14-day trial • Cancel anytime</span>
+              <span>Get started today • No commitments • Easy setup</span>
             </div>
           </div>
         </div>
