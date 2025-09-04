@@ -78,3 +78,6 @@ bfg-*.jar
 # Admin scripts with hardcoded credentials
 backend/create_admin.py
 **/create_admin.py
+
+# Claude Code project instructions (local only)
+CLAUDE.md
