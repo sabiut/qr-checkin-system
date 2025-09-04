@@ -178,6 +178,44 @@
                     <span class="property-value">{{ event.description }}</span>
                 </div>
                 {% endif %}
+                
+                {% if event.event_type == 'virtual' or event.event_type == 'hybrid' %}
+                    {% if event.virtual_link %}
+                    <div style="margin-top: 20px; padding: 15px; background: #f0f8ff; border: 2px solid #4169e1; border-radius: 8px;">
+                        <h4 style="margin: 0 0 15px 0; color: #4169e1; font-size: 16px; font-weight: bold;">🎥 Virtual Event Access</h4>
+                        <div class="event-property">
+                            <span class="property-label">Platform:</span>
+                            <span class="property-value">{{ event.virtual_platform|default:"Online Meeting"|capfirst }}</span>
+                        </div>
+                        <div class="event-property">
+                            <span class="property-label">Join Link:</span>
+                            <div style="margin-top: 8px;">
+                                <a href="{{ event.virtual_link }}" style="display: inline-block; padding: 10px 20px; background-color: #4169e1; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">Join Meeting</a>
+                            </div>
+                            <div style="margin-top: 5px; font-size: 11px; color: #666; word-break: break-all;">{{ event.virtual_link }}</div>
+                        </div>
+                        {% if event.virtual_meeting_id %}
+                        <div class="event-property">
+                            <span class="property-label">Meeting ID:</span>
+                            <span class="property-value">{{ event.virtual_meeting_id }}</span>
+                        </div>
+                        {% endif %}
+                        {% if event.virtual_passcode %}
+                        <div class="event-property">
+                            <span class="property-label">Passcode:</span>
+                            <span class="property-value">{{ event.virtual_passcode }}</span>
+                        </div>
+                        {% endif %}
+                        <div style="margin-top: 10px; font-size: 12px; color: #555;">
+                            {% if event.event_type == 'hybrid' %}
+                                <strong>Hybrid Event:</strong> You can attend in-person or virtually.
+                            {% else %}
+                                <strong>Virtual Event:</strong> Join online using the link above.
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endif %}
+                {% endif %}
             </div>
             
             <div class="qr-code">

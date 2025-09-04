@@ -2,7 +2,7 @@ import { useState, useEffect, useContext } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { Calendar, Clock, MapPin, Users, QrCode, Mail, Phone, AlertCircle, 
          PlusCircle, XCircle, ChevronLeft, Check, Loader2, UserCheck, ClipboardList,
-         Trash2, X, Ticket } from 'lucide-react';
+         Trash2, X, Ticket, Video, Globe, ExternalLink, Copy } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
 import TicketViewer from '../components/TicketViewer';
 
@@ -16,6 +16,11 @@ interface Event {
   attendee_count: number;
   max_attendees: number | null;
   is_full: boolean;
+  event_type: 'in_person' | 'virtual' | 'hybrid';
+  virtual_link?: string;
+  virtual_meeting_id?: string;
+  virtual_passcode?: string;
+  virtual_platform?: string;
 }
 
 interface Invitation {
@@ -457,6 +462,63 @@ export default function EventDetail() {
                       </p>
                     </div>
                   </div>
+
+                  {/* Virtual Event Details */}
+                  {(event.event_type === 'virtual' || event.event_type === 'hybrid') && event.virtual_link && (
+                    <div className="flex items-start">
+                      <div className="flex-shrink-0 bg-blue-100 p-3 rounded-lg">
+                        <Video size={24} className="text-blue-600" />
+                      </div>
+                      <div className="ml-4 flex-1">
+                        <h3 className="text-sm font-medium text-gray-500">
+                          {event.event_type === 'hybrid' ? 'Virtual Access' : 'Join Online'}
+                        </h3>
+                        <div className="mt-2 space-y-2">
+                          <div className="flex items-center gap-2">
+                            <a
+                              href={event.virtual_link}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-2 px-3 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                            >
+                              <ExternalLink size={16} />
+                              Join {event.virtual_platform ? event.virtual_platform.charAt(0).toUpperCase() + event.virtual_platform.slice(1) : 'Meeting'}
+                            </a>
+                            <button
+                              onClick={() => {
+                                navigator.clipboard.writeText(event.virtual_link!);
+                                // You could add a toast notification here
+                              }}
+                              className="inline-flex items-center gap-1 px-2 py-1 text-gray-500 hover:text-gray-700 transition-colors"
+                              title="Copy link"
+                            >
+                              <Copy size={14} />
+                            </button>
+                          </div>
+                          
+                          <div className="text-sm text-gray-600 space-y-1">
+                            {event.virtual_platform && (
+                              <p><span className="font-medium">Platform:</span> {event.virtual_platform.charAt(0).toUpperCase() + event.virtual_platform.slice(1)}</p>
+                            )}
+                            {event.virtual_meeting_id && (
+                              <p><span className="font-medium">Meeting ID:</span> {event.virtual_meeting_id}</p>
+                            )}
+                            {event.virtual_passcode && (
+                              <p><span className="font-medium">Passcode:</span> {event.virtual_passcode}</p>
+                            )}
+                          </div>
+
+                          {event.event_type === 'hybrid' && (
+                            <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                              <p className="text-sm text-yellow-800">
+                                <strong>Hybrid Event:</strong> You can attend either in-person at {event.location} or join virtually using the link above.
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
                 
                 <div className="mt-8">

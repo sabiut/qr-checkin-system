@@ -1,6 +1,6 @@
 import { useState, useEffect, useContext } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Calendar, Clock, MapPin, Users, AlertCircle, X, ChevronLeft, Save } from 'lucide-react';
+import { Calendar, Clock, MapPin, Users, AlertCircle, X, ChevronLeft, Save, Video, Monitor, Globe } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
 
 export default function NewEvent() {
@@ -26,6 +26,11 @@ export default function NewEvent() {
     time: '',
     location: '',
     max_attendees: '',
+    event_type: 'in_person',
+    virtual_link: '',
+    virtual_meeting_id: '',
+    virtual_passcode: '',
+    virtual_platform: '',
   });
 
   // Separate references for date and time inputs to avoid React controlled component issues
@@ -57,7 +62,7 @@ export default function NewEvent() {
   }, [isBrowser]);
 
   // Handle changes for text and number inputs
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
@@ -148,13 +153,38 @@ export default function NewEvent() {
         headers['Authorization'] = `Token ${token}`;
       }
       
+      // Clean the form data - remove empty virtual event fields for in-person events
+      const cleanedData = {
+        ...formData,
+        max_attendees: formData.max_attendees ? parseInt(formData.max_attendees) : null,
+      };
+      
+      // For in-person events, remove virtual event fields to avoid validation errors
+      if (formData.event_type === 'in_person') {
+        delete cleanedData.virtual_link;
+        delete cleanedData.virtual_meeting_id;
+        delete cleanedData.virtual_passcode;
+        delete cleanedData.virtual_platform;
+      } else {
+        // For virtual/hybrid events, only send virtual fields if they have values
+        if (!formData.virtual_link || formData.virtual_link.trim() === '') {
+          delete cleanedData.virtual_link;
+        }
+        if (!formData.virtual_meeting_id || formData.virtual_meeting_id.trim() === '') {
+          delete cleanedData.virtual_meeting_id;
+        }
+        if (!formData.virtual_passcode || formData.virtual_passcode.trim() === '') {
+          delete cleanedData.virtual_passcode;
+        }
+        if (!formData.virtual_platform || formData.virtual_platform.trim() === '') {
+          delete cleanedData.virtual_platform;
+        }
+      }
+
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers,
-        body: JSON.stringify({
-          ...formData,
-          max_attendees: formData.max_attendees ? parseInt(formData.max_attendees) : null,
-        }),
+        body: JSON.stringify(cleanedData),
       });
       
       // Log the response status for debugging
@@ -373,6 +403,119 @@ export default function NewEvent() {
                 className="w-full px-4 py-2.5 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500/20 focus:outline-none focus:border-blue-500 transition-colors text-gray-900"
               />
             </div>
+
+            {/* Event Type Selection */}
+            <div>
+              <label htmlFor="event_type" className="flex items-center text-sm font-medium text-gray-700 mb-1.5">
+                <Monitor size={16} className="mr-1.5 text-gray-500" />
+                <span>Event Type</span>
+                <span className="ml-1 text-red-500">*</span>
+              </label>
+              <select
+                id="event_type"
+                name="event_type"
+                value={formData.event_type}
+                onChange={handleChange}
+                required
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500/20 focus:outline-none focus:border-blue-500 transition-colors text-gray-900 bg-white"
+              >
+                <option value="in_person">In-Person</option>
+                <option value="virtual">Virtual</option>
+                <option value="hybrid">Hybrid (In-Person + Virtual)</option>
+              </select>
+              <p className="mt-1.5 text-xs text-gray-500">Choose whether this is an in-person, virtual, or hybrid event.</p>
+            </div>
+
+            {/* Virtual Event Fields - Show when event is virtual or hybrid */}
+            {(formData.event_type === 'virtual' || formData.event_type === 'hybrid') && (
+              <div className="space-y-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="flex items-center mb-4">
+                  <Video size={20} className="text-blue-600 mr-2" />
+                  <h3 className="text-lg font-semibold text-blue-900">Virtual Event Details</h3>
+                </div>
+
+                <div>
+                  <label htmlFor="virtual_platform" className="flex items-center text-sm font-medium text-gray-700 mb-1.5">
+                    <Globe size={16} className="mr-1.5 text-gray-500" />
+                    <span>Platform</span>
+                    <span className="ml-1 text-red-500">*</span>
+                  </label>
+                  <select
+                    id="virtual_platform"
+                    name="virtual_platform"
+                    value={formData.virtual_platform}
+                    onChange={handleChange}
+                    required={formData.event_type === 'virtual' || formData.event_type === 'hybrid'}
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500/20 focus:outline-none focus:border-blue-500 transition-colors text-gray-900 bg-white"
+                  >
+                    <option value="">Select platform</option>
+                    <option value="zoom">Zoom</option>
+                    <option value="teams">Microsoft Teams</option>
+                    <option value="meet">Google Meet</option>
+                    <option value="webex">Cisco Webex</option>
+                    <option value="gotomeeting">GoToMeeting</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label htmlFor="virtual_link" className="flex items-center text-sm font-medium text-gray-700 mb-1.5">
+                    <Globe size={16} className="mr-1.5 text-gray-500" />
+                    <span>Meeting Link</span>
+                    <span className="ml-1 text-red-500">*</span>
+                  </label>
+                  <input
+                    type="url"
+                    id="virtual_link"
+                    name="virtual_link"
+                    value={formData.virtual_link}
+                    onChange={handleChange}
+                    required={formData.event_type === 'virtual' || formData.event_type === 'hybrid'}
+                    placeholder="https://zoom.us/j/123456789 or https://teams.microsoft.com/..."
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500/20 focus:outline-none focus:border-blue-500 transition-colors text-gray-900"
+                  />
+                  <p className="mt-1.5 text-xs text-gray-500">Full URL that attendees will use to join the virtual event.</p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label htmlFor="virtual_meeting_id" className="block text-sm font-medium text-gray-700 mb-1.5">
+                      Meeting ID
+                      <span className="ml-1 text-gray-400 text-xs">(optional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      id="virtual_meeting_id"
+                      name="virtual_meeting_id"
+                      value={formData.virtual_meeting_id}
+                      onChange={handleChange}
+                      placeholder="123-456-789"
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500/20 focus:outline-none focus:border-blue-500 transition-colors text-gray-900"
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="virtual_passcode" className="block text-sm font-medium text-gray-700 mb-1.5">
+                      Passcode
+                      <span className="ml-1 text-gray-400 text-xs">(optional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      id="virtual_passcode"
+                      name="virtual_passcode"
+                      value={formData.virtual_passcode}
+                      onChange={handleChange}
+                      placeholder="Meeting passcode"
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500/20 focus:outline-none focus:border-blue-500 transition-colors text-gray-900"
+                    />
+                  </div>
+                </div>
+
+                <p className="text-xs text-blue-700 bg-blue-100 p-3 rounded-lg">
+                  <strong>Note:</strong> Virtual event details will be included in tickets and shown to attendees. Make sure all information is accurate before creating the event.
+                </p>
+              </div>
+            )}
             
             <div>
               <label htmlFor="max_attendees" className="flex items-center text-sm font-medium text-gray-700 mb-1.5">

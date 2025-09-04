@@ -39,6 +39,19 @@ class Invitation(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
+    # RSVP fields
+    rsvp_status = models.CharField(
+        max_length=10,
+        choices=[
+            ('PENDING', 'Pending'),
+            ('ATTENDING', 'Attending'),
+            ('DECLINED', 'Declined')
+        ],
+        default='PENDING'
+    )
+    rsvp_notes = models.TextField(blank=True, help_text='Additional notes from the guest (dietary requirements, etc.)')
+    rsvp_timestamp = models.DateTimeField(blank=True, null=True, help_text='When the guest responded to the RSVP')
+    
     def __str__(self):
         return f"{self.guest_name} - {self.event.name}"
     
@@ -510,6 +523,28 @@ class Invitation(models.Model):
                             <span class="info-value">{event.location}</span>
                         </div>
                         {f'<div class="info-row"><span class="info-label">Details:</span><span class="info-value">{event.description}</span></div>' if event.description else ''}
+                        
+                        {f'''
+                        <div style="margin-top: 20px; padding: 15px; background: #f0f8ff; border: 2px solid #4169e1; border-radius: 8px;">
+                            <h4 style="margin: 0 0 15px 0; color: #4169e1; font-size: 16px; font-weight: bold;">🎥 Virtual Event Access</h4>
+                            <div class="info-row">
+                                <span class="info-label">Platform:</span>
+                                <span class="info-value">{event.virtual_platform.capitalize() if event.virtual_platform else 'Online Meeting'}</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Join Link:</span>
+                                <div style="margin-top: 8px;">
+                                    <a href="{event.virtual_link}" style="display: inline-block; padding: 10px 20px; background-color: #4169e1; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">Join Meeting</a>
+                                </div>
+                                <div style="margin-top: 5px; font-size: 11px; color: #666; word-break: break-all;">{event.virtual_link}</div>
+                            </div>
+                            {f'<div class="info-row"><span class="info-label">Meeting ID:</span><span class="info-value">{event.virtual_meeting_id}</span></div>' if event.virtual_meeting_id else ''}
+                            {f'<div class="info-row"><span class="info-label">Passcode:</span><span class="info-value">{event.virtual_passcode}</span></div>' if event.virtual_passcode else ''}
+                            <div style="margin-top: 10px; font-size: 12px; color: #555;">
+                                {'<strong>Hybrid Event:</strong> You can attend in-person or virtually.' if event.event_type == 'hybrid' else '<strong>Virtual Event:</strong> Join online using the link above.'}
+                            </div>
+                        </div>
+                        ''' if (event.event_type == 'virtual' or event.event_type == 'hybrid') and event.virtual_link else ''}
                     </div>
                 </div>
                 <div class="ticket-qr">
@@ -702,6 +737,87 @@ class Invitation(models.Model):
                 else:
                     p.drawString(left_column + 1*inch, y_position, location)
                     y_position -= 0.3*inch
+                
+                # Add Virtual Event Details if applicable
+                if (self.event.event_type == 'virtual' or self.event.event_type == 'hybrid') and self.event.virtual_link:
+                    y_position -= 0.4*inch
+                    p.setFont("Helvetica-Bold", 14)
+                    p.setFillColor(primary_color)
+                    p.drawString(left_column, y_position, "VIRTUAL EVENT ACCESS")
+                    
+                    # Add line under section title
+                    p.setStrokeColor(colors.lightgrey)
+                    p.line(left_column, y_position - 0.1*inch, 
+                          width/2 - 0.5*inch, y_position - 0.1*inch)
+                    
+                    p.setFillColor(colors.black)
+                    
+                    # Platform
+                    y_position -= 0.4*inch
+                    p.setFont("Helvetica-Bold", 12)
+                    p.drawString(left_column, y_position, "Platform:")
+                    p.setFont("Helvetica", 12)
+                    platform = self.event.virtual_platform.capitalize() if self.event.virtual_platform else 'Online Meeting'
+                    p.drawString(left_column + 1*inch, y_position, platform)
+                    
+                    # Join Link (make it clickable)
+                    y_position -= 0.3*inch
+                    p.setFont("Helvetica-Bold", 12)
+                    p.drawString(left_column, y_position, "Join Link:")
+                    p.setFont("Helvetica", 10)
+                    link = str(self.event.virtual_link)
+                    
+                    # Create clickable link in PDF
+                    link_x = left_column + 1*inch
+                    link_width = width/2 - 2*inch  # Available width for the link
+                    
+                    if len(link) > 35:  # If link is too long, wrap it
+                        # First line
+                        p.setFillColor(colors.blue)
+                        p.drawString(link_x, y_position, link[:35] + "...")
+                        p.linkURL(link, (link_x, y_position - 0.05*inch, link_x + 2.5*inch, y_position + 0.15*inch))
+                        
+                        # Second line (if needed)
+                        if len(link) > 35:
+                            y_position -= 0.2*inch
+                            remaining = link[35:70] + ("..." if len(link) > 70 else "")
+                            p.drawString(link_x, y_position, remaining)
+                            # Add link to second line too
+                            p.linkURL(link, (link_x, y_position - 0.05*inch, link_x + len(remaining)*0.06*inch, y_position + 0.15*inch))
+                    else:
+                        # Short link - single line with clickable area
+                        p.setFillColor(colors.blue)
+                        p.drawString(link_x, y_position, link)
+                        # Make the entire link clickable
+                        p.linkURL(link, (link_x, y_position - 0.05*inch, link_x + len(link)*0.06*inch, y_position + 0.15*inch))
+                    
+                    # Reset color
+                    p.setFillColor(colors.black)
+                    
+                    # Meeting ID
+                    if self.event.virtual_meeting_id:
+                        y_position -= 0.3*inch
+                        p.setFont("Helvetica-Bold", 12)
+                        p.drawString(left_column, y_position, "Meeting ID:")
+                        p.setFont("Helvetica", 12)
+                        p.drawString(left_column + 1*inch, y_position, str(self.event.virtual_meeting_id))
+                    
+                    # Passcode
+                    if self.event.virtual_passcode:
+                        y_position -= 0.3*inch
+                        p.setFont("Helvetica-Bold", 12)
+                        p.drawString(left_column, y_position, "Passcode:")
+                        p.setFont("Helvetica", 12)
+                        p.drawString(left_column + 1*inch, y_position, str(self.event.virtual_passcode))
+                    
+                    # Event type note
+                    y_position -= 0.4*inch
+                    p.setFont("Helvetica-Oblique", 10)
+                    p.setFillColor(colors.darkblue)
+                    if self.event.event_type == 'hybrid':
+                        p.drawString(left_column, y_position, "Hybrid Event: You can attend in-person or virtually.")
+                    else:
+                        p.drawString(left_column, y_position, "Virtual Event: Join online using the link above.")
                 
                 # Add QR Code section in right column
                 # Create a light gray box for the QR code

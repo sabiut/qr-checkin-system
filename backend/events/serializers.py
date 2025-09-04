@@ -25,8 +25,9 @@ class EventSerializer(serializers.ModelSerializer):
         model = Event
         fields = [
             'id', 'owner', 'owner_id', 'name', 'description', 'date', 'time', 
-            'location', 'max_attendees', 'attendee_count',
-            'is_full', 'created_at', 'updated_at'
+            'location', 'max_attendees', 'attendee_count', 'is_full', 
+            'event_type', 'virtual_link', 'virtual_meeting_id', 'virtual_passcode', 
+            'virtual_platform', 'created_at', 'updated_at'
         ]
         read_only_fields = ['owner']
         
