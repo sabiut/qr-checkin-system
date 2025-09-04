@@ -11,6 +11,7 @@ type Params = {
   "/": {};
   "/login": {};
   "/register": {};
+  "/contact": {};
   "/events": {};
   "/events/new": {};
   "/events/:eventId": {

@@ -9,6 +9,15 @@
 .env
 *.env
 .env.*
+.env.production
+.env.local
+.env.development
+frontend/.env
+frontend/.env.production
+frontend/.env.local
+backend/.env
+backend/.env.production
+backend/.env.local
 !.env.example
 !*.env.example
 
@@ -53,3 +62,11 @@ credentials.json
 *.pem
 *.key
 *.cert
+
+# Deployment files - Never commit these
+deploy_simple.sh
+setup_linode.sh
+docker-compose.prod.yml
+nginx.conf
+qr-checkin-deploy.tar.gz
+*.tar.gz

@@ -94,8 +94,9 @@ export default function EventDetail() {
         setLoading(true);
         
         // Try to get from local storage first (for offline mode)
+        let cachedEvents = null;
         if (typeof window !== 'undefined' && window.localStorage) {
-          const cachedEvents = localStorage.getItem('events');
+          cachedEvents = localStorage.getItem('events');
           
           if (cachedEvents) {
             const parsedEvents = JSON.parse(cachedEvents);
