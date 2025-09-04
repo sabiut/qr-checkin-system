@@ -2,7 +2,7 @@
 
 An automated check-in system that scans QR codes from invitations and marks guests as attending. The system can create invitations with QR codes and works in environments with limited internet connectivity.
 
-## 🚀 Live Demo
+## Live Demo
 
 **Demo URL**: [https://eventqr.app/](https://eventqr.app/)
 
