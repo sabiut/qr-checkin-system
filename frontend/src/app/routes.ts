@@ -14,6 +14,10 @@ export default [
     path: "register",
     file: "routes/register.tsx",
   },
+  {
+    path: "contact",
+    file: "routes/contact.tsx",
+  },
   // Protected routes that require authentication
   {
     path: "events",

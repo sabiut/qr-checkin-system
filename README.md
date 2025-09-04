@@ -83,11 +83,22 @@ Generate one at: https://myaccount.google.com/apppasswords
 git clone <repository-url>
 cd qr-checkin-system
 
-# Start the application
+# Start the development application
 docker-compose up -d
 
-# Access the application
+# Access the application (Development)
 # Frontend: http://localhost:3000
+# Backend API: http://localhost:8000
+```
+
+### Production Deployment
+
+```bash
+# Start the production application
+docker-compose -f docker-compose.prod.yml up -d
+
+# Access the application (Production)
+# Frontend: http://localhost:3000 (or via nginx on port 80/443)
 # Backend API: http://localhost:8000
 ```
 
