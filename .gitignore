@@ -65,8 +65,16 @@ credentials.json
 
 # Deployment files - Never commit these
 deploy_simple.sh
+deploy_to_linode.sh
+deploy_*.sh
 setup_linode.sh
 docker-compose.prod.yml
 nginx.conf
 qr-checkin-deploy.tar.gz
 *.tar.gz
+*.jar
+bfg-*.jar
+
+# Admin scripts with hardcoded credentials
+backend/create_admin.py
+**/create_admin.py
