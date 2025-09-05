@@ -1,27 +1,34 @@
+# Multi-stage build to ensure clean dependencies
+FROM node:20-alpine AS deps
+
+WORKDIR /app
+
+# Copy package files
+COPY package.json package-lock.json ./
+
+# Clean npm cache and install with integrity checks
+RUN npm cache clean --force && \
+    npm ci --verbose --no-audit --no-fund && \
+    npm cache verify
+
+# Runtime stage
 FROM node:20-alpine
 
 WORKDIR /app
 
-# Copy package files first
-COPY package*.json ./
+# Copy package files and node_modules from deps stage
+COPY package.json package-lock.json ./
+COPY --from=deps /app/node_modules ./node_modules
 
-# Clean install with increased timeout and network concurrency
-RUN npm config set fetch-timeout 600000 && \
-    npm config set fetch-retries 5 && \
-    npm config set fetch-retry-mintimeout 20000 && \
-    npm config set fetch-retry-maxtimeout 120000 && \
-    npm config set network-concurrency 1 && \
-    npm cache clean --force && \
-    npm install --verbose --no-audit --no-fund
+# Verify installation integrity
+RUN npm ls @babel/helper-create-class-features-plugin || \
+    npm install @babel/helper-create-class-features-plugin --save-dev --verbose
 
 # Install react-router CLI globally
 RUN npm install -g @react-router/dev
 
 # Copy application files
 COPY . .
-
-# Ensure all dependencies are properly installed
-RUN npm list || npm install --verbose --no-audit --no-fund
 
 # Expose port
 EXPOSE 5173
