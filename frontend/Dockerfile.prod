@@ -11,5 +11,5 @@ COPY . .
 # Expose port
 EXPOSE 3000
 
-# Run exactly like dev setup - install ALL dependencies including devDependencies
-CMD ["sh", "-c", "NODE_ENV=development npm ci && npx vite --host 0.0.0.0 --port 3000"]
+# Run using npm dev script which properly configures React Router
+CMD ["sh", "-c", "NODE_ENV=development npm ci && npm run dev -- --host 0.0.0.0 --port 3000"]
