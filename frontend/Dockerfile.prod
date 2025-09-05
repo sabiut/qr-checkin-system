@@ -14,5 +14,5 @@ COPY . .
 # Expose port
 EXPOSE 3000
 
-# Just run vite dev server like in development (avoids all build issues)
-CMD ["sh", "-c", "npx vite --host 0.0.0.0 --port 3000"]
+# Use production vite config without React Router SSR
+CMD ["sh", "-c", "npx vite --config vite.config.prod.ts --host 0.0.0.0 --port 3000"]
