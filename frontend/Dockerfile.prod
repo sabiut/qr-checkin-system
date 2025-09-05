@@ -11,8 +11,11 @@ RUN npm ci
 # Copy all files
 COPY . .
 
+# Build the application
+RUN npm run build
+
 # Expose port
 EXPOSE 3000
 
-# Use production vite config without React Router SSR
-CMD ["sh", "-c", "npx vite --config vite.config.prod.ts --host 0.0.0.0 --port 3000"]
+# Serve the built application
+CMD ["npm", "start"]

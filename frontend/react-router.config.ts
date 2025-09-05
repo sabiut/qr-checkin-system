@@ -1,8 +1,8 @@
 import type { Config } from "@react-router/dev/config";
 
 export default {
-  // Enable Server-side rendering for better SEO and performance
-  ssr: true,
+  // Temporarily disable SSR to fix production build issues
+  ssr: false,
   
   // Relative path prefix for app routes
   basename: "/",
