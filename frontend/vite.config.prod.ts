@@ -8,11 +8,13 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     strictPort: true,
-    port: 3000
+    port: 3000,
+    allowedHosts: ['eventqr.app', 'www.eventqr.app', '172.105.189.124', 'localhost']
   },
   preview: {
     host: '0.0.0.0',
     strictPort: true,
-    port: 3000
+    port: 3000,
+    allowedHosts: ['eventqr.app', 'www.eventqr.app', '172.105.189.124', 'localhost']
   }
 });
