@@ -135,5 +135,5 @@ The system is designed to work with limited internet connectivity:
 - Backend can operate in offline mode, syncing when connectivity is restored
 - Local storage for temporary data storage
 - Tickets can be downloaded and stored locally.
-# Pipeline test - fix container permissions
+# Pipeline test - nginx.conf deployment fix complete
 
