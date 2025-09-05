@@ -8,7 +8,7 @@ An automated check-in system that scans QR codes from invitations and marks gues
 
 *Note: The demo may be a bit slow to load initially as it's hosted on a shared server.*
 
-**Latest Updates**: Contact page with professional form validation and virtual event support (Zoom/Teams/Meet). Deploy stage fixes applied - deployment should work now!
+**Latest Updates**: Contact page with professional form validation and virtual event support (Zoom/Teams/Meet). Pipeline deployment should work now with correct file paths!
 
 ## Features
 
