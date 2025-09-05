@@ -1,19 +1,18 @@
-FROM node:20 AS build-env
+FROM node:20-alpine AS development-dependencies-env
 WORKDIR /app
 COPY package*.json ./
-
-# Clean install to avoid corrupted packages
-RUN npm cache clean --force && \
-    npm ci --verbose
-
+RUN npm ci
 COPY . .
+
+FROM node:20-alpine AS build-env
+WORKDIR /app
+COPY . .
+COPY --from=development-dependencies-env /app/node_modules /app/node_modules
 
 # Create the app directory structure directly in the Dockerfile instead of using a script
 RUN mkdir -p app && \
     cp -r src/app/* app/ || true
 
-# Set memory limit for Node.js during build (1.5GB for 2GB server)
-ENV NODE_OPTIONS="--max-old-space-size=1536"
 RUN npm run build
 
 FROM node:20-alpine AS production
