@@ -11,5 +11,5 @@ COPY . .
 # Expose port
 EXPOSE 3000
 
-# Run using npm dev script which properly configures React Router
-CMD ["sh", "-c", "NODE_ENV=development npm ci && npm run dev -- --host 0.0.0.0 --port 3000"]
+# Run using npm dev script with environment variable passed through
+CMD ["sh", "-c", "NODE_ENV=development npm ci && VITE_API_URL=${VITE_API_URL:-http://backend:8000} npm run dev -- --host 0.0.0.0 --port 3000"]
