@@ -1,0 +1,24 @@
+# Jenkins Webhook Trigger
+# This file exists to inform developers that this repository triggers
+# a Jenkins CI/CD pipeline located in the infrastructure repository.
+
+Pipeline Location: https://github.com/sabiut/qr-checkin-infrastructure/jenkins/Jenkinsfile
+Jenkins Job: qr-checkin-system-pipeline
+Webhook URL: https://jenkins.vanuatucloud.com/github-webhook/
+
+## How it works:
+1. Push to this repository triggers GitHub webhook
+2. Webhook triggers Jenkins pipeline in infrastructure repo
+3. Jenkins pipeline checks out both app and infrastructure code
+4. Pipeline builds, tests, and deploys the application
+
+## Pipeline Stages:
+- Checkout both repositories (app + infrastructure)
+- Detect changes since last build
+- Test server connectivity
+- Build (Frontend, Backend, Docker images)
+- Deploy to production (main branch only)
+- Health checks
+
+## Manual Trigger:
+Visit Jenkins dashboard and run "qr-checkin-system-pipeline" job
