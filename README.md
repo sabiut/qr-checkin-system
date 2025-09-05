@@ -132,4 +132,4 @@ The system is designed to work with limited internet connectivity:
 - Frontend uses service workers for offline capabilities
 - Backend can operate in offline mode, syncing when connectivity is restored
 - Local storage for temporary data storage
-- Tickets can be downloaded and stored locally.
+- Tickets can be downloaded and stored locally
