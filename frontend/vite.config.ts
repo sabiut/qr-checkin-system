@@ -9,6 +9,7 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     strictPort: true,
+    allowedHosts: ['eventqr.app', 'www.eventqr.app', '172.105.189.124', 'localhost'],
     // Disable host check completely
     hmr: {
       overlay: false,
@@ -17,6 +18,7 @@ export default defineConfig({
   },
   preview: {
     host: '0.0.0.0',
-    strictPort: true
+    strictPort: true,
+    allowedHosts: ['eventqr.app', 'www.eventqr.app', '172.105.189.124', 'localhost']
   }
 });
