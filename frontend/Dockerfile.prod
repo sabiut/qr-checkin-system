@@ -5,17 +5,11 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install all dependencies including dev dependencies (needed for @react-router/dev)
-RUN npm ci
-
 # Copy all files
 COPY . .
-
-# Build the application
-RUN npm run build
 
 # Expose port
 EXPOSE 3000
 
-# Serve the built application with Vite preview (bypasses host restrictions)
-CMD ["npx", "vite", "preview", "--config", "vite.config.prod.ts", "--host", "0.0.0.0", "--port", "3000"]
+# Run exactly like dev setup - uses main vite.config.ts with allowedHosts
+CMD ["sh", "-c", "npm ci && npx vite --host 0.0.0.0 --port 3000"]
