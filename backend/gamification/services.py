@@ -137,6 +137,107 @@ class BadgeService:
         if event_type and hasattr(event, 'event_type'):
             return event.event_type == event_type
         return False
+    
+    def check_feedback_badges(self, user, feedback_instance):
+        """Check and award feedback-related badges"""
+        newly_earned_badges = []
+        
+        try:
+            profile = AttendeeProfile.objects.get(user=user)
+            
+            # Get feedback count for this user
+            from feedback_system.models import EventFeedback
+            feedback_count = EventFeedback.objects.filter(
+                respondent_email=user.email,
+                gamification_processed=True
+            ).count()
+            
+            # Feedback milestone badges
+            feedback_milestones = [
+                (1, 'feedback_first', 'First Feedback', 'Submitted your first event feedback'),
+                (5, 'feedback_veteran', 'Feedback Veteran', 'Provided feedback for 5 events'),
+                (10, 'feedback_expert', 'Feedback Expert', 'Provided feedback for 10 events'),
+                (25, 'feedback_champion', 'Feedback Champion', 'Provided feedback for 25 events'),
+            ]
+            
+            for count, badge_slug, title, description in feedback_milestones:
+                if feedback_count == count:
+                    badge, created = Badge.objects.get_or_create(
+                        name=title,
+                        badge_type='feedback',
+                        defaults={
+                            'description': description,
+                            'icon': '📝',
+                            'criteria': {'feedback_count': count},
+                            'is_active': True
+                        }
+                    )
+                    
+                    earned_badge, created = UserBadge.objects.get_or_create(
+                        user=user,
+                        badge=badge,
+                        defaults={'earned_at': timezone.now()}
+                    )
+                    
+                    if created:
+                        newly_earned_badges.append(earned_badge)
+            
+            # Quality feedback badges based on feedback content
+            if hasattr(feedback_instance, 'overall_rating') and feedback_instance.overall_rating:
+                # High rating badge
+                if feedback_instance.overall_rating >= 4:
+                    badge, created = Badge.objects.get_or_create(
+                        name='Positive Reviewer',
+                        badge_type='feedback',
+                        defaults={
+                            'description': 'Consistently gives positive feedback',
+                            'icon': '⭐',
+                            'criteria': {'positive_feedback': True},
+                            'is_active': True
+                        }
+                    )
+                    
+                    earned_badge, created = UserBadge.objects.get_or_create(
+                        user=user,
+                        badge=badge,
+                        defaults={'earned_at': timezone.now()}
+                    )
+                    
+                    if created:
+                        newly_earned_badges.append(earned_badge)
+            
+            # Detailed feedback badge
+            detailed_feedback = (
+                (feedback_instance.what_went_well and len(feedback_instance.what_went_well.strip()) > 50) or
+                (feedback_instance.what_needs_improvement and len(feedback_instance.what_needs_improvement.strip()) > 50) or
+                (feedback_instance.additional_comments and len(feedback_instance.additional_comments.strip()) > 50)
+            )
+            
+            if detailed_feedback:
+                badge, created = Badge.objects.get_or_create(
+                    name='Detailed Reviewer',
+                    badge_type='feedback',
+                    defaults={
+                        'description': 'Provides comprehensive feedback with detailed comments',
+                        'icon': '📋',
+                        'criteria': {'detailed_feedback': True},
+                        'is_active': True
+                    }
+                )
+                
+                earned_badge, created = UserBadge.objects.get_or_create(
+                    user=user,
+                    badge=badge,
+                    defaults={'earned_at': timezone.now()}
+                )
+                
+                if created:
+                    newly_earned_badges.append(earned_badge)
+        
+        except Exception as e:
+            logger.error(f"Error checking feedback badges for user {user.id}: {str(e)}")
+        
+        return newly_earned_badges
 
 
 class LeaderboardService:
