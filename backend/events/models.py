@@ -1,5 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import User
+from datetime import datetime, timezone as tz
 import logging
 
 logger = logging.getLogger(__name__)
@@ -31,6 +32,12 @@ class Event(models.Model):
     
     def __str__(self):
         return self.name
+    
+    def get_start_datetime(self):
+        """Combine date and time into a timezone-aware datetime object"""
+        naive_datetime = datetime.combine(self.date, self.time)
+        # Make it timezone-aware (assuming UTC, but you can adjust based on your needs)
+        return naive_datetime.replace(tzinfo=tz.utc)
         
     # We'll rely on the serializer instead of these properties to avoid 500 errors
     # These are kept for reference but not used directly in the serializer

@@ -104,7 +104,10 @@ def format_event_description(event, invitation=None):
         description.append('--- Your Ticket Information ---')
         description.append(f'Ticket ID: {invitation.id}')
         description.append(f'Name: {invitation.guest_name}')
-        description.append(f'Check-in URL: https://eventqr.app/tickets/{invitation.id}/')
+        # Use BASE_URL setting for production flexibility
+        from django.conf import settings
+        base_url = getattr(settings, 'BASE_URL', 'https://eventqr.app')
+        description.append(f'Check-in URL: {base_url}/tickets/{invitation.id}/')
         description.append('')
         description.append('Please bring your QR code ticket to the event.')
     
