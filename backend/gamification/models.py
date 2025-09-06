@@ -77,6 +77,7 @@ class Badge(models.Model):
         ('punctuality', 'Punctuality'),
         ('streak', 'Streak'),
         ('networking', 'Networking'),
+        ('feedback', 'Feedback'),
         ('special', 'Special'),
     ]
     

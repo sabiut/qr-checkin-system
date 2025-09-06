@@ -253,6 +253,236 @@ class InvitationViewSet(viewsets.ModelViewSet):
         html_parts.append('</div>')
         return ''.join(html_parts)
     
+    def _generate_feedback_html(self, invitation, is_event_ended=False):
+        """Generate HTML section for event feedback."""
+        from datetime import datetime
+        from django.utils import timezone
+        
+        # Check if event has ended (allow feedback 1 hour after event end)
+        if not is_event_ended:
+            event_end = invitation.event.get_start_datetime()
+            if event_end:
+                # Assuming events last 4 hours on average
+                estimated_end = event_end + timezone.timedelta(hours=4)
+                is_event_ended = timezone.now() > estimated_end
+        
+        # Check if feedback already submitted
+        has_feedback = False
+        if invitation.guest_email:
+            from feedback_system.models import EventFeedback
+            has_feedback = EventFeedback.objects.filter(
+                event=invitation.event,
+                respondent_email=invitation.guest_email
+            ).exists()
+        
+        if not invitation.guest_email:
+            return ""  # No feedback without email
+        
+        base_style = """
+        <style>
+        .feedback-section {
+            margin: 30px 20px;
+            padding: 20px;
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            border-radius: 10px;
+            color: white;
+            font-family: Arial, sans-serif;
+        }
+        .feedback-header {
+            text-align: center;
+            margin-bottom: 20px;
+            font-size: 24px;
+            font-weight: bold;
+        }
+        .feedback-prompt {
+            text-align: center;
+            background: rgba(255,255,255,0.1);
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+        .feedback-btn {
+            background: #f59e0b;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 25px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            margin: 5px;
+            text-decoration: none;
+            display: inline-block;
+            transition: background 0.3s;
+        }
+        .feedback-btn:hover {
+            background: #d97706;
+            color: white;
+            text-decoration: none;
+        }
+        .feedback-completed {
+            background: #22c55e;
+        }
+        .feedback-completed:hover {
+            background: #16a34a;
+        }
+        </style>
+        """
+        
+        html_parts = [base_style]
+        html_parts.append('<div class="feedback-section">')
+        
+        if has_feedback:
+            # Already submitted feedback
+            html_parts.extend([
+                '<div class="feedback-header">✅ Thank You for Your Feedback!</div>',
+                '<div class="feedback-prompt">',
+                '<p>Your feedback has been received and helps us improve future events.</p>',
+                '<p>🎮 You earned points for providing valuable feedback!</p>',
+                '</div>'
+            ])
+        elif not is_event_ended:
+            # Event hasn't ended yet
+            html_parts.extend([
+                '<div class="feedback-header">📝 Share Your Experience</div>',
+                '<div class="feedback-prompt">',
+                '<p>Enjoying the event? Your feedback will be available after the event ends.</p>',
+                '<p>💡 <strong>Tip:</strong> Complete feedback to earn extra gamification points!</p>',
+                '</div>'
+            ])
+        else:
+            # Event ended, show feedback form
+            feedback_url = f"/api/feedback/feedback/?event_id={invitation.event.id}&invitation_id={invitation.id}&email={invitation.guest_email}"
+            html_parts.extend([
+                '<div class="feedback-header">📝 How Was the Event?</div>',
+                '<div class="feedback-prompt">',
+                '<p>Your feedback helps us improve future events and earns you gamification points!</p>',
+                '<p><strong>Earn up to 35 points</strong> for detailed feedback:</p>',
+                '<ul style="text-align: left; margin: 10px 0; padding-left: 20px;">',
+                '<li>🌟 15 points for rating the event</li>',
+                '<li>✍️ +5 points for each detailed comment section</li>',
+                '<li>🚀 +5 points for NPS promoter rating</li>',
+                '<li>👍 +3 points for recommending the event</li>',
+                '</ul>',
+                f'<a href="#" onclick="openFeedbackForm()" class="feedback-btn">Share Your Feedback</a>',
+                '</div>',
+                '''
+                <script>
+                function openFeedbackForm() {
+                    // Create and show feedback modal/form
+                    showFeedbackModal();
+                }
+                
+                function showFeedbackModal() {
+                    // Simple modal implementation
+                    const modal = document.createElement('div');
+                    modal.style.cssText = `
+                        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+                        background: rgba(0,0,0,0.8); z-index: 1000; padding: 20px;
+                        display: flex; align-items: center; justify-content: center;
+                    `;
+                    
+                    modal.innerHTML = `
+                        <div style="background: white; padding: 30px; border-radius: 10px; max-width: 500px; width: 100%; max-height: 90vh; overflow-y: auto;">
+                            <h2 style="color: #333; margin-bottom: 20px;">📝 Event Feedback</h2>
+                            <form id="feedbackForm">
+                                <div style="margin-bottom: 15px;">
+                                    <label style="display: block; margin-bottom: 5px; font-weight: bold; color: #333;">Overall Rating:</label>
+                                    <select name="overall_rating" required style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                                        <option value="">Select rating...</option>
+                                        <option value="5">⭐⭐⭐⭐⭐ Excellent</option>
+                                        <option value="4">⭐⭐⭐⭐ Good</option>
+                                        <option value="3">⭐⭐⭐ Average</option>
+                                        <option value="2">⭐⭐ Poor</option>
+                                        <option value="1">⭐ Very Poor</option>
+                                    </select>
+                                </div>
+                                
+                                <div style="margin-bottom: 15px;">
+                                    <label style="display: block; margin-bottom: 5px; font-weight: bold; color: #333;">What went well? (+5 bonus points)</label>
+                                    <textarea name="what_went_well" rows="3" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;" placeholder="Tell us what you enjoyed most..."></textarea>
+                                </div>
+                                
+                                <div style="margin-bottom: 15px;">
+                                    <label style="display: block; margin-bottom: 5px; font-weight: bold; color: #333;">What could be improved? (+5 bonus points)</label>
+                                    <textarea name="what_needs_improvement" rows="3" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;" placeholder="How can we make future events better?"></textarea>
+                                </div>
+                                
+                                <div style="margin-bottom: 15px;">
+                                    <label style="display: block; margin-bottom: 5px; font-weight: bold; color: #333;">Would you recommend this event?</label>
+                                    <select name="would_recommend" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                                        <option value="">Select...</option>
+                                        <option value="true">👍 Yes (+3 bonus points)</option>
+                                        <option value="false">👎 No</option>
+                                    </select>
+                                </div>
+                                
+                                <div style="text-align: center; margin-top: 20px;">
+                                    <button type="button" onclick="submitFeedback()" style="background: #10b981; color: white; padding: 12px 24px; border: none; border-radius: 6px; margin-right: 10px; cursor: pointer;">
+                                        Submit Feedback
+                                    </button>
+                                    <button type="button" onclick="closeFeedbackModal()" style="background: #6b7280; color: white; padding: 12px 24px; border: none; border-radius: 6px; cursor: pointer;">
+                                        Cancel
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    `;
+                    
+                    document.body.appendChild(modal);
+                    modal.onclick = function(e) {
+                        if (e.target === modal) closeFeedbackModal();
+                    };
+                }
+                
+                function closeFeedbackModal() {
+                    const modal = document.querySelector('div[style*="position: fixed"]');
+                    if (modal) modal.remove();
+                }
+                
+                function submitFeedback() {
+                    const form = document.getElementById('feedbackForm');
+                    const formData = new FormData(form);
+                    
+                    // Convert to JSON
+                    const data = {
+                        event: ''' + str(invitation.event.id) + f''',
+                        invitation: "{invitation.id}",
+                        respondent_email: "{invitation.guest_email}",
+                        respondent_name: "{invitation.guest_name}",
+                        overall_rating: parseInt(formData.get('overall_rating')),
+                        what_went_well: formData.get('what_went_well'),
+                        what_needs_improvement: formData.get('what_needs_improvement'),
+                        would_recommend: formData.get('would_recommend') === 'true',
+                        submission_source: 'ticket'
+                    }};
+                    
+                    // Submit to API
+                    fetch('/api/feedback/feedback/', {{
+                        method: 'POST',
+                        headers: {{
+                            'Content-Type': 'application/json',
+                        }},
+                        body: JSON.stringify(data)
+                    }})
+                    .then(response => response.json())
+                    .then(data => {{
+                        alert('Thank you for your feedback! You earned gamification points.');
+                        closeFeedbackModal();
+                        location.reload(); // Refresh to show updated stats
+                    }})
+                    .catch(error => {{
+                        console.error('Error:', error);
+                        alert('There was an error submitting your feedback. Please try again.');
+                    }});
+                }}
+                </script>
+                '''
+            ])
+        
+        html_parts.append('</div>')
+        return ''.join(html_parts)
+    
     def perform_create(self, serializer):
         """Override create to send email with ticket."""
         invitation = None
@@ -490,6 +720,19 @@ class InvitationViewSet(viewsets.ModelViewSet):
             except Exception as e:
                 logger.error(f"Gamification HTML generation failed: {e}")
                 # Continue without gamification section
+            
+            # Add feedback section to the HTML
+            try:
+                feedback_html = self._generate_feedback_html(invitation)
+                
+                # Insert feedback section before the closing body tag
+                if '</body>' in html_content:
+                    html_content = html_content.replace('</body>', f'{feedback_html}</body>')
+                else:
+                    html_content += feedback_html
+            except Exception as e:
+                logger.error(f"Feedback HTML generation failed: {e}")
+                # Continue without feedback section
                         
             return HttpResponse(html_content)
         return Response({'error': 'Ticket not found'}, status=404)

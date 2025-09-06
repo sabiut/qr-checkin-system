@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     'attendance',
     'users',
     'gamification',
+    'feedback_system',
 ]
 
 MIDDLEWARE = [
