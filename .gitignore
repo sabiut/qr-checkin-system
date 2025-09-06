@@ -63,6 +63,15 @@ credentials.json
 *.key
 *.cert
 
+# CI/CD & Jenkins - Never commit these
+.jenkins-webhook
+jenkins-webhook.*
+webhook-config.*
+ci-config.*
+pipeline-config.*
+*jenkins*config*
+jenkins.properties
+
 # Deployment files - Never commit these
 deploy_simple.sh
 deploy_to_linode.sh
