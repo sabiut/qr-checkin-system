@@ -25,9 +25,13 @@ class InvitationViewSet(viewsets.ModelViewSet):
     
     def get_permissions(self):
         """
-        - Require authentication for all invitation operations including viewing tickets
+        - Allow anyone to view tickets (for guest access)
+        - Require authentication for other operations
         """
-        permission_classes = [IsAuthenticated]
+        if self.action == 'view_ticket':
+            permission_classes = [AllowAny]  # Allow guests to view their tickets
+        else:
+            permission_classes = [IsAuthenticated]
         return [permission() for permission in permission_classes]
         
     def get_qr_code_html(self, qr_code_data_uri, qr_code_url):
@@ -69,48 +73,269 @@ class InvitationViewSet(viewsets.ModelViewSet):
             )
             return f'<div style="{placeholder_style}">(QR code not available)</div>'
     
+    def _generate_gamification_html(self, invitation, user_account_exists, user_stats, is_authenticated):
+        """Generate HTML section for gamification features."""
+        if not invitation.guest_email:
+            return ""
+        
+        base_style = """
+        <style>
+        .gamification-section {
+            margin: 30px 20px;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 10px;
+            color: white;
+            font-family: Arial, sans-serif;
+        }
+        .gamification-header {
+            text-align: center;
+            margin-bottom: 20px;
+            font-size: 24px;
+            font-weight: bold;
+        }
+        .account-prompt {
+            text-align: center;
+            background: rgba(255,255,255,0.1);
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+        .user-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .stat-card {
+            background: rgba(255,255,255,0.1);
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .stat-number {
+            font-size: 28px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .stat-label {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        .badges {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin: 15px 0;
+        }
+        .badge {
+            font-size: 24px;
+            background: rgba(255,255,255,0.2);
+            padding: 8px 12px;
+            border-radius: 20px;
+            border: 2px solid rgba(255,255,255,0.3);
+        }
+        .register-btn, .login-btn {
+            background: #4CAF50;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 25px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            margin: 5px;
+            text-decoration: none;
+            display: inline-block;
+            transition: background 0.3s;
+        }
+        .register-btn:hover, .login-btn:hover {
+            background: #45a049;
+            color: white;
+            text-decoration: none;
+        }
+        .login-btn {
+            background: #2196F3;
+        }
+        .login-btn:hover {
+            background: #1976D2;
+        }
+        </style>
+        """
+        
+        html_parts = [base_style]
+        html_parts.append('<div class="gamification-section">')
+        
+        if not user_account_exists:
+            # User doesn't have an account - encourage registration
+            html_parts.extend([
+                '<div class="gamification-header">🎮 Unlock Event Rewards!</div>',
+                '<div class="account-prompt">',
+                '<p><strong>Create an account to earn points, badges, and climb the leaderboard!</strong></p>',
+                '<p>Track your attendance streaks, collect achievement badges, and compete with other event attendees.</p>',
+                f'<a href="/api/auth/register-page/?email={invitation.guest_email}&next=/tickets/{invitation.id}/" class="register-btn">Create Account</a>',
+                '<p style="margin-top: 15px; font-size: 14px; opacity: 0.8;">',
+                '🏆 Earn badges for punctuality, attendance streaks, and more<br>',
+                '📊 Climb leaderboards and track your progress<br>',
+                '🔥 Build attendance streaks and unlock special rewards',
+                '</p>',
+                '</div>'
+            ])
+        elif not is_authenticated:
+            # User has account but not logged in
+            html_parts.extend([
+                '<div class="gamification-header">🔐 Login to See Your Stats!</div>',
+                '<div class="account-prompt">',
+                '<p>You have a gamification account! Login to see your points, badges, and streak.</p>',
+                f'<a href="/api/auth/login-page/?email={invitation.guest_email}&next=/tickets/{invitation.id}/" class="login-btn">Login</a>',
+                '</div>'
+            ])
+        elif user_stats:
+            # User is logged in and has stats
+            profile = user_stats['profile']
+            badges = user_stats['badges']
+            
+            html_parts.extend([
+                '<div class="gamification-header">🎮 Your Event Stats</div>',
+                '<div class="user-stats">',
+                f'<div class="stat-card"><div class="stat-number">{profile.total_points}</div><div class="stat-label">Points</div></div>',
+                f'<div class="stat-card"><div class="stat-number">{profile.current_streak}🔥</div><div class="stat-label">Current Streak</div></div>',
+                f'<div class="stat-card"><div class="stat-number">{profile.total_events_attended}</div><div class="stat-label">Events Attended</div></div>',
+                f'<div class="stat-card"><div class="stat-number">{profile.level}</div><div class="stat-label">Level</div></div>',
+                '</div>'
+            ])
+            
+            if badges.exists():
+                html_parts.append('<div class="badges">')
+                for user_badge in badges[:5]:  # Show first 5 badges
+                    html_parts.append(f'<div class="badge" title="{user_badge.badge.name}: {user_badge.badge.description}">{user_badge.badge.icon}</div>')
+                if badges.count() > 5:
+                    html_parts.append(f'<div class="badge">+{badges.count() - 5}</div>')
+                html_parts.append('</div>')
+            
+            # Next badge progress
+            if user_stats.get('next_badge'):
+                next_badge_data = user_stats['next_badge']
+                if next_badge_data is None:
+                    # No next badge available
+                    pass
+                elif isinstance(next_badge_data, dict) and 'badge' in next_badge_data:
+                    next_badge = next_badge_data['badge']
+                    progress = next_badge_data['progress']
+                    
+                    html_parts.extend([
+                        '<div class="account-prompt">',
+                        f'<p><strong>Next Badge: {next_badge.icon} {next_badge.name}</strong></p>',
+                        f'<p>{next_badge.description}</p>',
+                        f'<div style="background: rgba(255,255,255,0.2); height: 8px; border-radius: 4px; margin: 10px 0;">',
+                        f'<div style="background: #4CAF50; height: 8px; border-radius: 4px; width: {progress:.1f}%;"></div>',
+                        f'</div>',
+                        f'<p style="font-size: 14px; opacity: 0.8;">{progress:.1f}% complete</p>',
+                        '</div>'
+                    ])
+                elif next_badge_data:
+                    # Handle case where next_badge is the badge object directly
+                    next_badge = next_badge_data
+                    progress = 0
+                    
+                    html_parts.extend([
+                        '<div class="account-prompt">',
+                        f'<p><strong>Next Badge: {next_badge.icon} {next_badge.name}</strong></p>',
+                        f'<p>{next_badge.description}</p>',
+                        f'<div style="background: rgba(255,255,255,0.2); height: 8px; border-radius: 4px; margin: 10px 0;">',
+                        f'<div style="background: #4CAF50; height: 8px; border-radius: 4px; width: {progress:.1f}%;"></div>',
+                        f'</div>',
+                        f'<p style="font-size: 14px; opacity: 0.8;">{progress:.1f}% complete</p>',
+                        '</div>'
+                    ])
+        
+        html_parts.append('</div>')
+        return ''.join(html_parts)
+    
     def perform_create(self, serializer):
         """Override create to send email with ticket."""
-        invitation = serializer.save()
-        logger.info(f"Created invitation {invitation.id}")
-        
-        # Wait for tickets to be generated
-        # At this point, save() in the model should have generated the tickets
-        if invitation.guest_email:
-            logger.info(f"Invitation has email ({invitation.guest_email}), sending email...")
+        invitation = None
+        try:
+            logger.info("Starting invitation creation process")
             
-            # Make sure tickets are generated before trying to send email
+            # Save the invitation to database first
+            invitation = serializer.save()
+            logger.info(f"✅ Successfully created invitation {invitation.id} in database")
+            
+            # Verify the invitation exists in database
+            if not Invitation.objects.filter(id=invitation.id).exists():
+                logger.error(f"❌ CRITICAL: Invitation {invitation.id} was not saved to database!")
+                raise ValueError(f"Invitation {invitation.id} was not saved to database")
+            
+            logger.info(f"✅ Verified invitation {invitation.id} exists in database")
+            
+            # Check if tickets were generated during save
             if not invitation.ticket_html or not invitation.ticket_pdf:
                 logger.info(f"Tickets not found for invitation {invitation.id}, generating them now")
                 try:
                     invitation.generate_tickets()
                     invitation.save()
-                    logger.info(f"Tickets generated for invitation {invitation.id}")
+                    logger.info(f"✅ Tickets generated for invitation {invitation.id}")
                 except Exception as e:
-                    logger.error(f"Failed to generate tickets for invitation {invitation.id}: {str(e)}")
+                    logger.error(f"❌ Failed to generate tickets for invitation {invitation.id}: {str(e)}")
+                    import traceback
+                    logger.error(traceback.format_exc())
+                    # Don't fail the entire creation just because tickets failed
+            else:
+                logger.info(f"✅ Tickets already exist for invitation {invitation.id}")
             
-            # Now try to send the email
-            try:
-                # Use the existing endpoint to send the email
-                self.get_object = lambda: invitation  # Temporarily set get_object to return our invitation
-                response = self.send_email(request=None, pk=invitation.id)
-                if response.status_code >= 400:
-                    logger.error(f"Failed to send email: {response.data}")
-                else:
-                    logger.info(f"Email sent successfully to {invitation.guest_email}")
-            except Exception as e:
-                logger.error(f"Failed to send invitation email: {str(e)}")
-                import traceback
-                logger.error(traceback.format_exc())
+            # Send email if guest has email address
+            if invitation.guest_email:
+                logger.info(f"Invitation has email ({invitation.guest_email}), sending email...")
                 
-        return invitation
+                try:
+                    # Use the existing endpoint to send the email
+                    self.get_object = lambda: invitation  # Temporarily set get_object to return our invitation
+                    response = self.send_email(request=None, pk=invitation.id)
+                    if response.status_code >= 400:
+                        logger.error(f"❌ Failed to send email: {response.data}")
+                    else:
+                        logger.info(f"✅ Email sent successfully to {invitation.guest_email}")
+                except Exception as e:
+                    logger.error(f"❌ Failed to send invitation email: {str(e)}")
+                    import traceback
+                    logger.error(traceback.format_exc())
+                    # Don't fail the entire creation just because email failed
+            else:
+                logger.info(f"No email address provided for invitation {invitation.id}, skipping email")
+                
+            logger.info(f"✅ Invitation creation process completed successfully for {invitation.id}")
+            return invitation
+            
+        except Exception as e:
+            logger.error(f"❌ CRITICAL ERROR in invitation creation: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
+            
+            # If we have an invitation ID, log its status
+            if invitation and hasattr(invitation, 'id'):
+                exists = Invitation.objects.filter(id=invitation.id).exists()
+                logger.error(f"Invitation {invitation.id} exists in database: {exists}")
+            
+            # Re-raise the exception so the API returns an error
+            raise
     
     def get_queryset(self):
         """
         Filter invitations to only show those for events the user owns,
-        or all invitations if the user is staff
+        or all invitations if the user is staff.
+        For view_ticket action, allow access to all invitations for anonymous users.
         """
         user = self.request.user
+        
+        # For view_ticket action, allow anonymous users to access any invitation
+        if self.action == 'view_ticket':
+            return Invitation.objects.all()
+        
+        # Handle anonymous users (return empty queryset to prevent errors for other actions)
+        if not user.is_authenticated:
+            return Invitation.objects.none()
         
         # Staff can see all invitations
         if user.is_staff:
@@ -152,13 +377,67 @@ class InvitationViewSet(viewsets.ModelViewSet):
             return Response({'ticket_pdf_url': pdf_url})
         return Response({'error': 'PDF ticket not found'}, status=404)
 
-    @action(detail=True, methods=['get'])
+    @action(detail=True, methods=['get'], permission_classes=[AllowAny])
     def view_ticket(self, request, pk=None):
-        """View HTML ticket directly."""
-        invitation = self.get_object()
+        """View HTML ticket directly with gamification info."""
+        # Directly get the invitation by UUID without permission checks
+        # since we allow anyone with the link to view the ticket
+        try:
+            invitation = Invitation.objects.get(pk=pk)
+        except Invitation.DoesNotExist:
+            return Response({'error': 'Ticket not found'}, status=404)
+        
+        # Gamification logic: only do database queries for authenticated users
+        user_stats = None
+        user_account_exists = False
+        invitation_user = None
+        
+        # First check: is the current viewer authenticated?
+        viewer_is_authenticated = (hasattr(request, 'user') and 
+                                 request.user.is_authenticated and 
+                                 hasattr(request.user, 'id'))
+        
+        if invitation.guest_email:
+            from django.contrib.auth.models import User
+            try:
+                # Find the user account for this invitation's email
+                invitation_user = User.objects.get(email=invitation.guest_email)
+                user_account_exists = True
+                
+                # Only get stats if viewer is authenticated AND is the same user
+                logger.info(f"Viewer authenticated: {viewer_is_authenticated}")
+                if viewer_is_authenticated:
+                    logger.info(f"Request user: {request.user.username} (email: {request.user.email})")
+                    logger.info(f"Invitation user: {invitation_user.username} (email: {invitation_user.email})")
+                    logger.info(f"Users match: {request.user == invitation_user}")
+                
+                # Check if the emails match (more reliable than username comparison)
+                if (viewer_is_authenticated and 
+                    (request.user == invitation_user or request.user.email == invitation.guest_email)):
+                    try:
+                        from gamification.services import GamificationStatsService
+                        service = GamificationStatsService()
+                        # Safe to call because we know request.user is authenticated
+                        user_stats = service.get_user_stats(request.user)
+                        logger.info(f"Got user stats: {user_stats is not None}")
+                    except Exception as e:
+                        logger.error(f"Failed to get gamification stats: {e}")
+                        user_stats = None
+                        
+            except User.DoesNotExist:
+                # No user account exists for this email
+                pass
+            except Exception as e:
+                logger.error(f"Error checking user account: {e}")
+        
         if invitation.ticket_html:
             with invitation.ticket_html.open('r') as f:
-                html_content = f.read().decode('utf-8')
+                content = f.read()
+                # Handle both bytes and string content
+                if isinstance(content, bytes):
+                    html_content = content.decode('utf-8')
+                else:
+                    html_content = content
                 
             # For direct browser viewing, we need to make sure QR code is visible
             # Try to regenerate and embed QR code directly into the HTML
@@ -187,6 +466,30 @@ class InvitationViewSet(viewsets.ModelViewSet):
                         absolute_qr_url = f"{base_url}{qr_code_url}"
                         # Replace relative URL with absolute URL in the HTML
                         html_content = html_content.replace(f'src="{qr_code_url}"', f'src="{absolute_qr_url}"')
+            
+            # Add gamification section to the HTML
+            try:
+                # Simple logic: show stats if we have them, otherwise show prompts
+                is_viewing_own_ticket = (user_stats is not None)
+                
+                logger.info(f"=== GAMIFICATION HTML GENERATION ===")
+                logger.info(f"User account exists: {user_account_exists}")
+                logger.info(f"User stats available: {user_stats is not None}")
+                logger.info(f"Is viewing own ticket: {is_viewing_own_ticket}")
+                logger.info(f"Viewer is authenticated: {viewer_is_authenticated}")
+                
+                gamification_html = self._generate_gamification_html(
+                    invitation, user_account_exists, user_stats, is_viewing_own_ticket
+                )
+                
+                # Insert gamification section before the closing body tag
+                if '</body>' in html_content:
+                    html_content = html_content.replace('</body>', f'{gamification_html}</body>')
+                else:
+                    html_content += gamification_html
+            except Exception as e:
+                logger.error(f"Gamification HTML generation failed: {e}")
+                # Continue without gamification section
                         
             return HttpResponse(html_content)
         return Response({'error': 'Ticket not found'}, status=404)

@@ -6,6 +6,7 @@ class Attendance(models.Model):
     has_attended = models.BooleanField(default=False)
     check_in_time = models.DateTimeField(null=True, blank=True)
     check_in_notes = models.TextField(blank=True)
+    gamification_processed = models.BooleanField(default=False)  # Track if gamification was processed
     
     def __str__(self):
         return f"{self.invitation.guest_name} - {'Attended' if self.has_attended else 'Not Attended'}"
