@@ -3,8 +3,10 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.conf import settings
+from django.http import HttpResponse
 from .models import Event
 from .serializers import EventSerializer
+from .calendar_utils import create_event_calendar, generate_ics_filename
 import logging
 
 logger = logging.getLogger(__name__)
@@ -107,3 +109,48 @@ class EventViewSet(viewsets.ModelViewSet):
             return Response({
                 'detail': f"Server error: {str(e)}"
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    @action(detail=True, methods=['get'])
+    def download_calendar(self, request, pk=None):
+        """
+        Download an ICS calendar file for the event.
+        
+        This allows users to add the event to their personal calendar
+        (Google Calendar, Outlook, Apple Calendar, etc.)
+        """
+        try:
+            event = self.get_object()
+            
+            # Check permissions - only owner or staff can download
+            if not (request.user == event.owner or request.user.is_staff):
+                return Response(
+                    {"detail": "You don't have permission to download this event calendar."},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            
+            # Create the calendar
+            calendar = create_event_calendar(event)
+            ics_data = calendar.to_ical()
+            
+            # Generate filename
+            filename = generate_ics_filename(event)
+            
+            # Create the HTTP response with the ICS file
+            response = HttpResponse(ics_data, content_type='text/calendar')
+            response['Content-Disposition'] = f'attachment; filename="{filename}"'
+            
+            logger.info(f"Calendar downloaded for event {event.id} by user {request.user.id}")
+            
+            return response
+            
+        except Event.DoesNotExist:
+            return Response(
+                {"detail": "Event not found."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            logger.exception(f"Error generating calendar for event {pk}: {str(e)}")
+            return Response(
+                {"detail": f"Error generating calendar: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

@@ -10,6 +10,7 @@ from django.views.decorators.csrf import csrf_exempt
 from .models import Invitation
 from .serializers import InvitationSerializer
 from events.models import Event
+from events.calendar_utils import create_event_calendar, generate_ics_filename
 import logging
 import os
 import smtplib
@@ -193,14 +194,17 @@ class InvitationViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def send_email(self, request, pk=None):
         """Manually send email with ticket for an invitation."""
+        logger.info("=== SEND_EMAIL ACTION CALLED ===")
         invitation = self.get_object()
+        logger.info(f"Invitation retrieved: {invitation.id}")
         if not invitation.guest_email:
+            logger.error(f"No guest email for invitation {invitation.id}")
             return Response(
                 {'error': 'Invitation has no email address'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        logger.info(f"Manual email request for invitation {invitation.id} to {invitation.guest_email}")
+        logger.info(f"=== MANUAL EMAIL REQUEST for invitation {invitation.id} to {invitation.guest_email} ===")
         
         # Check if we have ticket files
         if not invitation.ticket_html and not invitation.ticket_pdf:
@@ -359,6 +363,27 @@ class InvitationViewSet(viewsets.ModelViewSet):
                                 
                                 <div class="ticket-footer">
                                     <p>Please present this QR code at the venue for quick check-in.</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Calendar Instructions -->
+                        <div style="background-color: #f8f9ff; border: 1px solid #e0e4ff; border-radius: 8px; padding: 20px; margin: 20px 0;">
+                            <h3 style="color: #4f46e5; margin: 0 0 10px 0; font-size: 16px;">📅 Add to Your Calendar</h3>
+                            <p style="margin: 0 0 15px 0; color: #555;">Don't forget about this event! We've included a calendar file with this email.</p>
+                            <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
+                                <div style="background-color: white; padding: 10px 15px; border-radius: 6px; border: 1px solid #ddd;">
+                                    <strong>📎 {generate_ics_filename(event)}</strong>
+                                    <br><small style="color: #666;">Click this attachment to add the event to your calendar</small>
+                                </div>
+                                <div style="color: #666; font-size: 14px;">
+                                    Works with Google Calendar, Outlook, Apple Calendar, and more!
+                                    <br><br>
+                                    <strong>Alternative:</strong> Add directly to 
+                                    <a href="https://calendar.google.com/calendar/render?action=TEMPLATE&text={event.name}&dates={event.date.strftime('%Y%m%d')}&details=Event%20Details:%20{event.description or 'Check-in with your QR code ticket'}&location={event.location}" 
+                                       style="color: #4285f4;">Google Calendar</a> | 
+                                    <a href="https://outlook.live.com/calendar/0/deeplink/compose?subject={event.name}&startdt={event.date}T{event.time}&body=Check-in%20with%20your%20QR%20code%20ticket" 
+                                       style="color: #0078d4;">Outlook</a>
                                 </div>
                             </div>
                         </div>
@@ -524,6 +549,31 @@ class InvitationViewSet(viewsets.ModelViewSet):
                     logger.error(f"Error generating PDF for attachment: {str(pdf_error)}")
             
             # No need to attach HTML ticket separately since it's already in the email body
+            
+            # Attach calendar invite (ICS file)
+            try:
+                logger.info("=== STARTING CALENDAR GENERATION ===")
+                logger.info(f"Event: {event.name} (ID: {event.id})")
+                logger.info(f"Event date: {event.date}, time: {event.time}")
+                logger.info(f"Invitation: {invitation.guest_name} ({invitation.guest_email})")
+                
+                calendar = create_event_calendar(event, invitation)
+                logger.info("Calendar object created successfully")
+                
+                ics_data = calendar.to_ical()
+                logger.info(f"ICS data generated: {len(ics_data)} bytes")
+                
+                ics_filename = generate_ics_filename(event)
+                logger.info(f"ICS filename: {ics_filename}")
+                
+                # Attach calendar with proper headers for better email client support
+                email.attach(ics_filename, ics_data, 'text/calendar; method=REQUEST')
+                logger.info("=== CALENDAR INVITE ATTACHED SUCCESSFULLY ===")
+            except Exception as cal_error:
+                logger.error(f"=== CALENDAR ERROR: {str(cal_error)} ===")
+                import traceback
+                logger.error(f"=== CALENDAR TRACEBACK: {traceback.format_exc()} ===")
+                # Continue without calendar attachment
             
             # Send the email
             logger.info(f"Sending email to {invitation.guest_email}...")
@@ -832,6 +882,31 @@ class InvitationViewSet(viewsets.ModelViewSet):
                     logger.error(f"Error generating PDF for attachment: {str(pdf_error)}")
             
             # No need to attach HTML ticket separately since it's already in the email body
+            
+            # Attach calendar invite (ICS file)
+            try:
+                logger.info("=== STARTING CALENDAR GENERATION ===")
+                logger.info(f"Event: {event.name} (ID: {event.id})")
+                logger.info(f"Event date: {event.date}, time: {event.time}")
+                logger.info(f"Invitation: {invitation.guest_name} ({invitation.guest_email})")
+                
+                calendar = create_event_calendar(event, invitation)
+                logger.info("Calendar object created successfully")
+                
+                ics_data = calendar.to_ical()
+                logger.info(f"ICS data generated: {len(ics_data)} bytes")
+                
+                ics_filename = generate_ics_filename(event)
+                logger.info(f"ICS filename: {ics_filename}")
+                
+                # Attach calendar with proper headers for better email client support
+                email.attach(ics_filename, ics_data, 'text/calendar; method=REQUEST')
+                logger.info("=== CALENDAR INVITE ATTACHED SUCCESSFULLY ===")
+            except Exception as cal_error:
+                logger.error(f"=== CALENDAR ERROR: {str(cal_error)} ===")
+                import traceback
+                logger.error(f"=== CALENDAR TRACEBACK: {traceback.format_exc()} ===")
+                # Continue without calendar attachment
                 
             # Send email
             logger.info("Sending email...")
