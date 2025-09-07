@@ -23,7 +23,7 @@ urlpatterns += [
 ]
 
 # User-friendly HTML pages
-from .html_views import networking_qr_page, networking_directory_page, networking_connections_page, networking_profile_page, update_networking_profile, networking_connect_page
+from .html_views import networking_qr_page, networking_directory_page, networking_connections_page, networking_profile_page, update_networking_profile, networking_connect_page, networking_connect_action
 
 urlpatterns += [
     path('networking/qr-code/<int:user_id>/<int:event_id>/', networking_qr_page, name='networking-qr-page'),
@@ -32,4 +32,5 @@ urlpatterns += [
     path('networking/profile/<int:user_id>/<int:event_id>/', networking_profile_page, name='networking-profile-page'),
     path('networking/profile/<int:user_id>/<int:event_id>/update/', update_networking_profile, name='update-networking-profile'),
     path('networking/connect/<str:qr_token>/', networking_connect_page, name='networking-connect-page'),
+    path('networking/connect-action/', networking_connect_action, name='networking-connect-action'),
 ]
