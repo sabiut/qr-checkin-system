@@ -268,7 +268,7 @@ def networking_directory_page(request: HttpRequest, event_id: int) -> HttpRespon
                         <strong>Interests:</strong> {safe_interests}
                     </div>
                     <div class="attendee-actions">
-                        <button class="btn btn-connect" onclick="connectWith('{user.id}', '{escape(user.get_full_name() or user.username)}')">
+                        <button class="btn btn-connect" onclick="connectWith('{user.id}', '{name}')">
                             <span class="btn-icon">🤝</span>
                             <span>Connect</span>
                             <span class="btn-hover-text">Let's network!</span>
