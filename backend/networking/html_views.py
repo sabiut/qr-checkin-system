@@ -1,13 +1,15 @@
-from django.http import HttpResponse
+from django.http import HttpResponse, HttpRequest
 from django.shortcuts import render, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
+from django.utils.html import escape
+from typing import Union
 from .models import NetworkingProfile, Connection, EventNetworkingSettings
 from .services import NetworkingQRService
 from events.models import Event
 import json
 
-def networking_qr_page(request, user_id, event_id):
+def networking_qr_page(request: HttpRequest, user_id: int, event_id: int) -> HttpResponse:
     """User-friendly QR code page"""
     try:
         user = get_object_or_404(User, id=user_id)
@@ -207,7 +209,7 @@ def networking_qr_page(request, user_id, event_id):
         return HttpResponse(f"Error generating QR code: {str(e)}", status=500)
 
 
-def networking_directory_page(request, event_id):
+def networking_directory_page(request: HttpRequest, event_id: int) -> HttpResponse:
     """User-friendly attendee directory page"""
     try:
         event = get_object_or_404(Event, id=event_id)
@@ -220,11 +222,10 @@ def networking_directory_page(request, event_id):
         except:
             return HttpResponse("Networking not configured for this event.", status=404)
         
-        # Get attendees with networking profiles
+        # Get attendees with networking profiles - optimized query
         from .models import NetworkingProfile
         profiles = NetworkingProfile.objects.filter(
-            visible_in_directory=True,
-            
+            visible_in_directory=True
         ).select_related('user').distinct()[:20]  # Limit to 20 for demo
         
         attendees_html = ""
@@ -232,9 +233,15 @@ def networking_directory_page(request, event_id):
             user = profile.user
             interests_str = ", ".join(profile.interests[:3]) if profile.interests else "No interests listed"
             
-            # Generate avatar initials
-            name = user.get_full_name() or user.username
+            # Generate avatar initials with HTML escaping
+            name = escape(user.get_full_name() or user.username)
             initials = ''.join([word[0].upper() for word in name.split()[:2]]) if name else "?"
+            
+            # Escape all user-provided content
+            safe_company = escape(profile.company or "Company not specified")
+            safe_job_title = escape(profile.job_title or "Attendee") 
+            safe_bio = escape(profile.bio[:100] + "..." if len(profile.bio) > 100 else profile.bio or "No bio available")
+            safe_interests = escape(interests_str)
             
             # Dynamic colors based on name hash
             colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E9']
@@ -248,20 +255,20 @@ def networking_directory_page(request, event_id):
                 </div>
                 <div class="attendee-content">
                     <div class="attendee-header">
-                        <div class="attendee-name">{user.get_full_name() or user.username}</div>
-                        <div class="attendee-title">{profile.job_title or "Attendee"}</div>
+                        <div class="attendee-name">{name}</div>
+                        <div class="attendee-title">{safe_job_title}</div>
                     </div>
                     <div class="attendee-company">
                         <span class="company-icon">🏢</span>
-                        {profile.company or "Company not specified"}
+                        {safe_company}
                     </div>
-                    <div class="attendee-bio">{profile.bio[:100] + "..." if len(profile.bio) > 100 else profile.bio or "No bio available"}</div>
+                    <div class="attendee-bio">{safe_bio}</div>
                     <div class="attendee-interests">
                         <span class="interests-icon">⭐</span>
-                        <strong>Interests:</strong> {interests_str}
+                        <strong>Interests:</strong> {safe_interests}
                     </div>
                     <div class="attendee-actions">
-                        <button class="btn btn-connect" onclick="connectWith('{user.id}', '{user.get_full_name() or user.username}')">
+                        <button class="btn btn-connect" onclick="connectWith('{user.id}', '{escape(user.get_full_name() or user.username)}')">
                             <span class="btn-icon">🤝</span>
                             <span>Connect</span>
                             <span class="btn-hover-text">Let's network!</span>
@@ -828,7 +835,7 @@ def networking_directory_page(request, event_id):
         return HttpResponse(f"Error loading directory: {str(e)}", status=500)
 
 
-def networking_connections_page(request, event_id):
+def networking_connections_page(request: HttpRequest, event_id: int) -> HttpResponse:
     """User-friendly connections management page"""
     try:
         event = get_object_or_404(Event, id=event_id)

@@ -545,7 +545,7 @@ class InvitationViewSet(viewsets.ModelViewSet):
         html_parts.append('</div>')  # Close gamification-section
         return ''.join(html_parts)
     
-    def _generate_networking_html(self, invitation, user_account_exists, user_stats, is_authenticated):
+    def _generate_networking_html(self, invitation, user_account_exists: bool, user_stats: dict, is_authenticated: bool) -> str:
         """Generate HTML section for networking features."""
         if not invitation.guest_email:
             return ""
