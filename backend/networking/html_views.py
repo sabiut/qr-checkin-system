@@ -1279,7 +1279,7 @@ def networking_profile_page(request: HttpRequest, user_id: int, event_id: int) -
                     </div>
                     
                     {f'''<div class="success-message">
-                        <span>✅</span> Your networking profile has been updated successfully!
+                        <span>&#10004;</span> Your networking profile has been updated successfully!
                     </div>''' if show_success else ''}
                     
                     <form method="POST" action="/networking/profile/{user_id}/{event_id}/update/">
@@ -1287,7 +1287,7 @@ def networking_profile_page(request: HttpRequest, user_id: int, event_id: int) -
                         
                         <div class="profile-section">
                             <div class="section-title">
-                                <span>👤</span> Profile Information
+                                <span>&#128100;</span> Profile Information
                             </div>
                             
                             <div class="form-group">
@@ -1317,7 +1317,7 @@ def networking_profile_page(request: HttpRequest, user_id: int, event_id: int) -
                         
                         <div class="profile-section">
                             <div class="section-title">
-                                <span>🔒</span> Privacy Settings
+                                <span>&#128274;</span> Privacy Settings
                             </div>
                             
                             <div class="checkbox-group">
@@ -1335,7 +1335,7 @@ def networking_profile_page(request: HttpRequest, user_id: int, event_id: int) -
                         
                         <div class="actions">
                             <button type="submit" class="btn btn-primary">
-                                <span>💾</span> Save Profile
+                                <span>&#128190;</span> Save Profile
                             </button>
                             <a href="javascript:history.back()" class="btn btn-secondary">
                                 <span>←</span> Back to Ticket
@@ -1574,7 +1574,7 @@ def networking_connect_page(request: HttpRequest, qr_token: str) -> HttpResponse
         <body>
             <div class="container">
                 <div class="header">
-                    <div class="qr-icon">📱</div>
+                    <div class="qr-icon">&#128241;</div>
                     <div class="title">QR Code Scanned!</div>
                     <div class="subtitle">Connect with this attendee</div>
                 </div>
@@ -1587,7 +1587,7 @@ def networking_connect_page(request: HttpRequest, qr_token: str) -> HttpResponse
                     <div class="user-company">{escape(profile.company or "Attendee")} • {escape(event.name)}</div>
                     
                     <div class="message">
-                        <strong>🤝 Ready to connect?</strong><br>
+                        <strong>&#129309; Ready to connect?</strong><br>
                         This will add {escape(target_user.get_full_name() or target_user.username)} to your professional network 
                         and you'll both earn networking points!
                     </div>
@@ -1595,7 +1595,7 @@ def networking_connect_page(request: HttpRequest, qr_token: str) -> HttpResponse
                     <div class="actions">
                         <a href="/api/networking/connections/create/?from_user={target_user.id}&to_user=self&event={event.id}&method=qr_scan" 
                            class="btn btn-primary">
-                            <span>🤝</span> Connect Now
+                            <span>&#129309;</span> Connect Now
                         </a>
                         <a href="/networking/directory/{event.id}/" class="btn btn-secondary">
                             <span>👥</span> Browse Attendees
