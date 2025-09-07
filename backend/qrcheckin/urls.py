@@ -17,6 +17,9 @@ urlpatterns = [
     path('api/feedback/', include('feedback_system.urls')),
     path('', include('networking.urls')),
     
+    # Health check endpoints for deployment validation
+    path('', include('health.urls')),
+    
     # Direct ticket viewing endpoint
     path('tickets/<uuid:pk>/', InvitationViewSet.as_view({'get': 'view_ticket'}), name='view-ticket'),
 ]
