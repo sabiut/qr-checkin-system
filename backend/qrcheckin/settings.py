@@ -144,30 +144,37 @@ REST_FRAMEWORK = {
     ],
 }
 
-# CORS settings
+# CORS settings - control which domains can make API requests
+# Type: List[str] - List of allowed origins for cross-origin requests
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-    "http://localhost:5173",
-    "http://frontend:3000",
-    "http://127.0.0.1:5173",
-    "http://127.0.0.1:3000",
-]
+    # Production domains
+    "https://eventqr.app",      # Primary production domain
+    "https://www.eventqr.app",  # WWW subdomain for production
+] + ([
+    # Development domains - only included in DEBUG mode
+    "http://localhost:3000",    # Frontend development server (React/Vite)
+    "http://localhost:5173",    # Alternative frontend dev server port
+    "http://frontend:3000",     # Docker development frontend service
+    "http://127.0.0.1:3000",    # Local development (IP-based)
+    "http://127.0.0.1:5173",    # Local development (IP-based, alt port)
+] if DEBUG else [])
 
 # Additional CORS settings
-CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_CREDENTIALS = True  # Allow cookies/auth headers in CORS requests
 
-# For development, you can use this setting to allow all origins (not recommended for production)
-# CORS_ALLOW_ALL_ORIGINS = True
-
-# CSRF settings - trusted origins for production
+# CSRF settings - trusted origins for secure form submissions
+# Type: List[str] - Only origins listed here can submit forms to Django views with CSRF protection
 CSRF_TRUSTED_ORIGINS = [
-    "https://eventqr.app",
-    "https://www.eventqr.app",
-    "http://localhost:3000",
-    "http://localhost:5173",
-    "http://127.0.0.1:3000",
-    "http://127.0.0.1:5173",
-]
+    # Production domains - main application domains
+    "https://eventqr.app",      # Primary production domain
+    "https://www.eventqr.app",  # WWW subdomain for production
+] + ([
+    # Development domains - only included in DEBUG mode
+    "http://localhost:3000",    # Frontend development server (React/Vite)
+    "http://localhost:5173",    # Alternative frontend dev server port
+    "http://127.0.0.1:3000",    # Local development (IP-based)
+    "http://127.0.0.1:5173",    # Local development (IP-based, alt port)
+] if DEBUG else [])
 
 # Offline mode settings
 OFFLINE_MODE = os.environ.get('OFFLINE_MODE', 'False') == 'True'

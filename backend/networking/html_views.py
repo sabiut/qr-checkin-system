@@ -1052,6 +1052,9 @@ def networking_profile_page(request: HttpRequest, user_id: int, event_id: int) -
         # Get CSRF token for form
         csrf_token = get_token(request)
         
+        # Check if form was just submitted successfully
+        show_success = request.GET.get('updated') == '1'
+        
         html = f'''
         <!DOCTYPE html>
         <html lang="en">
@@ -1275,6 +1278,10 @@ def networking_profile_page(request: HttpRequest, user_id: int, event_id: int) -
                         </div>
                     </div>
                     
+                    {f'''<div class="success-message">
+                        <span>✅</span> Your networking profile has been updated successfully!
+                    </div>''' if show_success else ''}
+                    
                     <form method="POST" action="/networking/profile/{user_id}/{event_id}/update/">
                         <input type="hidden" name="csrfmiddlewaretoken" value="{csrf_token}">
                         
@@ -1337,6 +1344,22 @@ def networking_profile_page(request: HttpRequest, user_id: int, event_id: int) -
                     </form>
                 </div>
             </div>
+            
+            <script>
+                // Auto-hide success message after 5 seconds
+                document.addEventListener('DOMContentLoaded', function() {{
+                    const successMessage = document.querySelector('.success-message');
+                    if (successMessage) {{
+                        setTimeout(function() {{
+                            successMessage.style.transition = 'opacity 0.5s ease-out';
+                            successMessage.style.opacity = '0';
+                            setTimeout(function() {{
+                                successMessage.remove();
+                            }}, 500);
+                        }}, 5000);
+                    }}
+                }});
+            </script>
         </body>
         </html>
         '''
@@ -1407,3 +1430,188 @@ def update_networking_profile(request: HttpRequest, user_id: int, event_id: int)
     except Exception as e:
         logger.error(f"Error updating networking profile for user {user_id}, event {event_id}: {str(e)}")
         return HttpResponse("An error occurred while updating your profile. Please try again.", status=500)
+
+
+def networking_connect_page(request: HttpRequest, qr_token: str) -> HttpResponse:
+    """Handle QR code scanning - connect users via QR token"""
+    try:
+        # Get event ID from query params
+        event_id = request.GET.get('event')
+        if not event_id:
+            return HttpResponse("Event ID missing from QR code", status=400)
+            
+        event = get_object_or_404(Event, id=event_id)
+        
+        # Find the user with this QR token
+        try:
+            profile = NetworkingProfile.objects.get(networking_qr_token=qr_token)
+            target_user = profile.user
+        except NetworkingProfile.DoesNotExist:
+            return HttpResponse("Invalid QR code", status=404)
+        
+        # Create connection page HTML
+        html = f'''
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Connect with {escape(target_user.get_full_name() or target_user.username)}</title>
+            <style>
+                * {{
+                    margin: 0;
+                    padding: 0;
+                    box-sizing: border-box;
+                }}
+                body {{
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                    background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+                    min-height: 100vh;
+                    padding: 20px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                }}
+                .container {{
+                    max-width: 500px;
+                    width: 100%;
+                    background: white;
+                    border-radius: 20px;
+                    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+                    overflow: hidden;
+                    text-align: center;
+                }}
+                .header {{
+                    background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+                    padding: 40px 30px;
+                    color: white;
+                }}
+                .qr-icon {{
+                    font-size: 48px;
+                    margin-bottom: 15px;
+                }}
+                .title {{
+                    font-size: 24px;
+                    font-weight: 700;
+                    margin-bottom: 10px;
+                }}
+                .subtitle {{
+                    font-size: 16px;
+                    opacity: 0.9;
+                }}
+                .content {{
+                    padding: 40px 30px;
+                }}
+                .avatar {{
+                    width: 80px;
+                    height: 80px;
+                    border-radius: 50%;
+                    background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 32px;
+                    font-weight: bold;
+                    color: white;
+                    margin: 0 auto 20px;
+                }}
+                .user-name {{
+                    font-size: 20px;
+                    font-weight: 600;
+                    color: #1e293b;
+                    margin-bottom: 5px;
+                }}
+                .user-company {{
+                    color: #64748b;
+                    margin-bottom: 30px;
+                }}
+                .message {{
+                    background: #f1f5f9;
+                    padding: 20px;
+                    border-radius: 12px;
+                    margin-bottom: 30px;
+                    color: #475569;
+                    line-height: 1.5;
+                }}
+                .actions {{
+                    display: flex;
+                    gap: 15px;
+                    justify-content: center;
+                    flex-wrap: wrap;
+                }}
+                .btn {{
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 8px;
+                    padding: 12px 24px;
+                    border-radius: 8px;
+                    text-decoration: none;
+                    font-weight: 600;
+                    font-size: 14px;
+                    transition: all 0.3s ease;
+                    border: none;
+                    cursor: pointer;
+                }}
+                .btn-primary {{
+                    background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+                    color: white;
+                }}
+                .btn-secondary {{
+                    background: #f1f5f9;
+                    color: #475569;
+                    border: 1px solid #e2e8f0;
+                }}
+                .btn:hover {{
+                    transform: translateY(-2px);
+                    box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+                }}
+                @media (max-width: 640px) {{
+                    .container {{ margin: 10px; }}
+                    .actions {{ flex-direction: column; }}
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <div class="qr-icon">📱</div>
+                    <div class="title">QR Code Scanned!</div>
+                    <div class="subtitle">Connect with this attendee</div>
+                </div>
+                
+                <div class="content">
+                    <div class="avatar">
+                        {escape(target_user.get_full_name() or target_user.username)[0].upper()}
+                    </div>
+                    <div class="user-name">{escape(target_user.get_full_name() or target_user.username)}</div>
+                    <div class="user-company">{escape(profile.company or "Attendee")} • {escape(event.name)}</div>
+                    
+                    <div class="message">
+                        <strong>🤝 Ready to connect?</strong><br>
+                        This will add {escape(target_user.get_full_name() or target_user.username)} to your professional network 
+                        and you'll both earn networking points!
+                    </div>
+                    
+                    <div class="actions">
+                        <a href="/api/networking/connections/create/?from_user={target_user.id}&to_user=self&event={event.id}&method=qr_scan" 
+                           class="btn btn-primary">
+                            <span>🤝</span> Connect Now
+                        </a>
+                        <a href="/networking/directory/{event.id}/" class="btn btn-secondary">
+                            <span>👥</span> Browse Attendees
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </body>
+        </html>
+        '''
+        
+        return HttpResponse(html)
+        
+    except Event.DoesNotExist:
+        logger.error(f"Event with id {event_id} not found for QR connect")
+        return HttpResponse("Event not found", status=404)
+    except Exception as e:
+        logger.error(f"Error handling QR connect for token {qr_token}: {str(e)}")
+        return HttpResponse("An error occurred while processing the QR code", status=500)
