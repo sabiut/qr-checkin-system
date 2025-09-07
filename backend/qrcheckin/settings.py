@@ -159,6 +159,16 @@ CORS_ALLOW_CREDENTIALS = True
 # For development, you can use this setting to allow all origins (not recommended for production)
 # CORS_ALLOW_ALL_ORIGINS = True
 
+# CSRF settings - trusted origins for production
+CSRF_TRUSTED_ORIGINS = [
+    "https://eventqr.app",
+    "https://www.eventqr.app",
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:5173",
+]
+
 # Offline mode settings
 OFFLINE_MODE = os.environ.get('OFFLINE_MODE', 'False') == 'True'
 
