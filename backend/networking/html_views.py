@@ -5,15 +5,19 @@ from django.contrib.auth.models import User
 from django.utils.html import escape
 from django.contrib import messages
 from django.views.decorators.http import require_http_methods
-from django.views.decorators.csrf import csrf_exempt
+from django.middleware.csrf import get_token
+from django.core.exceptions import ValidationError
 from typing import Union
 from .models import NetworkingProfile, Connection, EventNetworkingSettings
 from .services import NetworkingQRService
 from events.models import Event
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 def networking_qr_page(request: HttpRequest, user_id: int, event_id: int) -> HttpResponse:
-    """User-friendly QR code page"""
+    """User-friendly QR code page - No auth required for viewing QR codes"""
     try:
         user = get_object_or_404(User, id=user_id)
         event = get_object_or_404(Event, id=event_id)
@@ -213,7 +217,7 @@ def networking_qr_page(request: HttpRequest, user_id: int, event_id: int) -> Htt
 
 
 def networking_directory_page(request: HttpRequest, event_id: int) -> HttpResponse:
-    """User-friendly attendee directory page"""
+    """User-friendly attendee directory page - No auth required for browsing"""
     try:
         event = get_object_or_404(Event, id=event_id)
         
@@ -839,7 +843,7 @@ def networking_directory_page(request: HttpRequest, event_id: int) -> HttpRespon
 
 
 def networking_connections_page(request: HttpRequest, event_id: int) -> HttpResponse:
-    """User-friendly connections management page"""
+    """User-friendly connections management page - No auth required for viewing connections"""
     try:
         event = get_object_or_404(Event, id=event_id)
         
@@ -1014,11 +1018,16 @@ def networking_connections_page(request: HttpRequest, event_id: int) -> HttpResp
         return HttpResponse(f"Error loading connections: {str(e)}", status=500)
 
 
+@login_required
 def networking_profile_page(request: HttpRequest, user_id: int, event_id: int) -> HttpResponse:
     """Attendee networking profile page with edit functionality"""
     try:
         user = get_object_or_404(User, id=user_id)
         event = get_object_or_404(Event, id=event_id)
+        
+        # Authorization check - users can only edit their own profile
+        if request.user.id != user_id:
+            return HttpResponse("Unauthorized: You can only view your own profile", status=403)
         
         # Get or create networking profile
         profile, created = NetworkingProfile.objects.get_or_create(
@@ -1039,6 +1048,9 @@ def networking_profile_page(request: HttpRequest, user_id: int, event_id: int) -
             conn.points_awarded or 0 
             for conn in Connection.objects.filter(from_user=user, gamification_processed=True)
         )
+        
+        # Get CSRF token for form
+        csrf_token = get_token(request)
         
         html = f'''
         <!DOCTYPE html>
@@ -1264,7 +1276,7 @@ def networking_profile_page(request: HttpRequest, user_id: int, event_id: int) -
                     </div>
                     
                     <form method="POST" action="/networking/profile/{user_id}/{event_id}/update/">
-                        <input type="hidden" name="csrfmiddlewaretoken" value="">
+                        <input type="hidden" name="csrfmiddlewaretoken" value="{csrf_token}">
                         
                         <div class="profile-section">
                             <div class="section-title">
@@ -1331,11 +1343,18 @@ def networking_profile_page(request: HttpRequest, user_id: int, event_id: int) -
         
         return HttpResponse(html)
         
+    except User.DoesNotExist:
+        logger.error(f"User with id {user_id} not found for profile page")
+        return HttpResponse("User not found", status=404)
+    except Event.DoesNotExist:
+        logger.error(f"Event with id {event_id} not found for profile page")
+        return HttpResponse("Event not found", status=404)
     except Exception as e:
-        return HttpResponse(f"Error loading profile: {str(e)}", status=500)
+        logger.error(f"Error loading networking profile for user {user_id}, event {event_id}: {str(e)}")
+        return HttpResponse("An error occurred while loading your profile. Please try again.", status=500)
 
 
-@csrf_exempt
+@login_required
 @require_http_methods(["POST"])
 def update_networking_profile(request: HttpRequest, user_id: int, event_id: int) -> HttpResponse:
     """Handle profile updates"""
@@ -1343,21 +1362,48 @@ def update_networking_profile(request: HttpRequest, user_id: int, event_id: int)
         user = get_object_or_404(User, id=user_id)
         event = get_object_or_404(Event, id=event_id)
         
+        # Authorization check - users can only update their own profile
+        if request.user.id != user_id:
+            return HttpResponse("Unauthorized: You can only update your own profile", status=403)
+        
         # Get or create networking profile
         profile, created = NetworkingProfile.objects.get_or_create(user=user)
         
+        # Validate and sanitize input data
+        company = request.POST.get('company', '').strip()[:100]  # Limit length
+        industry = request.POST.get('industry', '').strip()[:100]
+        interests = request.POST.get('interests', '').strip()[:500]
+        bio = request.POST.get('bio', '').strip()[:1000]
+        
+        # Basic validation
+        if len(company) > 100:
+            return HttpResponse("Company name too long", status=400)
+        if len(bio) > 1000:
+            return HttpResponse("Bio too long", status=400)
+        
         # Update profile fields
-        profile.company = request.POST.get('company', '').strip()
-        profile.industry = request.POST.get('industry', '').strip()
-        profile.interests = request.POST.get('interests', '').strip()
-        profile.bio = request.POST.get('bio', '').strip()
+        profile.company = company
+        profile.industry = industry
+        profile.interests = interests
+        profile.bio = bio
         profile.visible_in_directory = 'visible_in_directory' in request.POST
         profile.allow_contact_sharing = 'allow_contact_sharing' in request.POST
         
         profile.save()
+        logger.info(f"Profile updated successfully for user {user_id}")
         
         # Redirect back to profile page with success message
         return redirect(f'/networking/profile/{user_id}/{event_id}/?updated=1')
         
+    except User.DoesNotExist:
+        logger.error(f"User with id {user_id} not found for profile update")
+        return HttpResponse("User not found", status=404)
+    except Event.DoesNotExist:
+        logger.error(f"Event with id {event_id} not found for profile update")
+        return HttpResponse("Event not found", status=404)
+    except ValidationError as e:
+        logger.warning(f"Validation error updating profile for user {user_id}: {str(e)}")
+        return HttpResponse("Invalid data provided", status=400)
     except Exception as e:
-        return HttpResponse(f"Error updating profile: {str(e)}", status=500)
+        logger.error(f"Error updating networking profile for user {user_id}, event {event_id}: {str(e)}")
+        return HttpResponse("An error occurred while updating your profile. Please try again.", status=500)
