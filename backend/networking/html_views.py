@@ -1630,8 +1630,8 @@ def networking_connect_action(request: HttpRequest) -> HttpResponse:
         # Get the event
         event = get_object_or_404(Event, id=event_id)
         
-        # Get the target user (person being connected to)
-        target_user = get_object_or_404(User, id=from_user_id)
+        # Get the QR code owner (person being connected to)
+        qr_code_owner = get_object_or_404(User, id=from_user_id)
         
         # Get current user (person doing the connecting)
         if not request.user.is_authenticated:
@@ -1640,15 +1640,15 @@ def networking_connect_action(request: HttpRequest) -> HttpResponse:
         current_user = request.user
         
         # Prevent self-connection
-        if current_user.id == target_user.id:
+        if current_user.id == qr_code_owner.id:
             return HttpResponse("You cannot connect to yourself", status=400)
             
         # Check if connection already exists
         from networking.models import Connection
         existing_connection = Connection.objects.filter(
-            user1=current_user, user2=target_user, event=event
+            user1=current_user, user2=qr_code_owner, event=event
         ).first() or Connection.objects.filter(
-            user1=target_user, user2=current_user, event=event
+            user1=qr_code_owner, user2=current_user, event=event
         ).first()
         
         if existing_connection:
@@ -1753,7 +1753,7 @@ def networking_connect_action(request: HttpRequest) -> HttpResponse:
                     <div class="content">
                         <div class="message">
                             <strong>Good news!</strong><br>
-                            You and {escape(target_user.get_full_name() or target_user.username)} are already connected 
+                            You and {escape(qr_code_owner.get_full_name() or qr_code_owner.username)} are already connected 
                             at {escape(event.name)}. Keep networking with other attendees!
                         </div>
                         
@@ -1772,7 +1772,7 @@ def networking_connect_action(request: HttpRequest) -> HttpResponse:
         # Create new connection
         Connection.objects.create(
             user1=current_user,
-            user2=target_user,
+            user2=qr_code_owner,
             event=event,
             connection_method=method,
             status='confirmed'
@@ -1783,7 +1783,7 @@ def networking_connect_action(request: HttpRequest) -> HttpResponse:
             from gamification.services import GamificationService
             gamification_service = GamificationService()
             gamification_service.award_points(current_user, 'networking_connection', event=event)
-            gamification_service.award_points(target_user, 'networking_connection', event=event)
+            gamification_service.award_points(qr_code_owner, 'networking_connection', event=event)
         except ImportError:
             pass  # Gamification not available
         
@@ -1919,13 +1919,13 @@ def networking_connect_action(request: HttpRequest) -> HttpResponse:
                 
                 <div class="content">
                     <div class="avatar">
-                        {escape(target_user.get_full_name() or target_user.username)[0].upper()}
+                        {escape(qr_code_owner.get_full_name() or qr_code_owner.username)[0].upper()}
                     </div>
-                    <div class="user-name">Connected with {escape(target_user.get_full_name() or target_user.username)}</div>
+                    <div class="user-name">Connected with {escape(qr_code_owner.get_full_name() or qr_code_owner.username)}</div>
                     
                     <div class="message">
                         <strong>&#127881; Great job!</strong><br>
-                        You and {escape(target_user.get_full_name() or target_user.username)} are now connected 
+                        You and {escape(qr_code_owner.get_full_name() or qr_code_owner.username)} are now connected 
                         in your professional network for {escape(event.name)}.
                     </div>
                     
