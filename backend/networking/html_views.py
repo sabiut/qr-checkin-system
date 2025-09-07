@@ -1,16 +1,23 @@
 from django.http import HttpResponse, HttpRequest
-from django.shortcuts import render, get_object_or_404
+from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.utils.html import escape
+from django.contrib import messages
+from django.views.decorators.http import require_http_methods
+from django.middleware.csrf import get_token
+from django.core.exceptions import ValidationError
 from typing import Union
 from .models import NetworkingProfile, Connection, EventNetworkingSettings
 from .services import NetworkingQRService
 from events.models import Event
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 def networking_qr_page(request: HttpRequest, user_id: int, event_id: int) -> HttpResponse:
-    """User-friendly QR code page"""
+    """User-friendly QR code page - No auth required for viewing QR codes"""
     try:
         user = get_object_or_404(User, id=user_id)
         event = get_object_or_404(Event, id=event_id)
@@ -210,7 +217,7 @@ def networking_qr_page(request: HttpRequest, user_id: int, event_id: int) -> Htt
 
 
 def networking_directory_page(request: HttpRequest, event_id: int) -> HttpResponse:
-    """User-friendly attendee directory page"""
+    """User-friendly attendee directory page - No auth required for browsing"""
     try:
         event = get_object_or_404(Event, id=event_id)
         
@@ -836,7 +843,7 @@ def networking_directory_page(request: HttpRequest, event_id: int) -> HttpRespon
 
 
 def networking_connections_page(request: HttpRequest, event_id: int) -> HttpResponse:
-    """User-friendly connections management page"""
+    """User-friendly connections management page - No auth required for viewing connections"""
     try:
         event = get_object_or_404(Event, id=event_id)
         
@@ -1009,3 +1016,394 @@ def networking_connections_page(request: HttpRequest, event_id: int) -> HttpResp
         
     except Exception as e:
         return HttpResponse(f"Error loading connections: {str(e)}", status=500)
+
+
+@login_required
+def networking_profile_page(request: HttpRequest, user_id: int, event_id: int) -> HttpResponse:
+    """Attendee networking profile page with edit functionality"""
+    try:
+        user = get_object_or_404(User, id=user_id)
+        event = get_object_or_404(Event, id=event_id)
+        
+        # Authorization check - users can only edit their own profile
+        if request.user.id != user_id:
+            return HttpResponse("Unauthorized: You can only view your own profile", status=403)
+        
+        # Get or create networking profile
+        profile, created = NetworkingProfile.objects.get_or_create(
+            user=user,
+            defaults={
+                'company': getattr(user, 'company', ''),
+                'visible_in_directory': True,
+                'allow_contact_sharing': True
+            }
+        )
+        
+        # Get networking stats
+        total_connections = Connection.objects.filter(from_user=user).count()
+        event_connections = Connection.objects.filter(from_user=user, event=event).count()
+        
+        # Calculate total points from networking
+        total_points = sum(
+            conn.points_awarded or 0 
+            for conn in Connection.objects.filter(from_user=user, gamification_processed=True)
+        )
+        
+        # Get CSRF token for form
+        csrf_token = get_token(request)
+        
+        html = f'''
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Networking Profile - {escape(user.get_full_name() or user.username)}</title>
+            <style>
+                * {{
+                    margin: 0;
+                    padding: 0;
+                    box-sizing: border-box;
+                }}
+                body {{
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                    background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+                    min-height: 100vh;
+                    padding: 20px;
+                }}
+                .container {{
+                    max-width: 600px;
+                    margin: 0 auto;
+                    background: white;
+                    border-radius: 20px;
+                    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+                    overflow: hidden;
+                }}
+                .header {{
+                    background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+                    padding: 30px;
+                    text-align: center;
+                    color: white;
+                }}
+                .avatar {{
+                    width: 80px;
+                    height: 80px;
+                    border-radius: 50%;
+                    background: rgba(255,255,255,0.2);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 36px;
+                    font-weight: bold;
+                    margin: 0 auto 15px;
+                    border: 3px solid rgba(255,255,255,0.3);
+                }}
+                .name {{
+                    font-size: 24px;
+                    font-weight: 700;
+                    margin-bottom: 5px;
+                }}
+                .event {{
+                    font-size: 14px;
+                    opacity: 0.9;
+                }}
+                .content {{
+                    padding: 30px;
+                }}
+                .stats {{
+                    display: grid;
+                    grid-template-columns: repeat(3, 1fr);
+                    gap: 20px;
+                    margin-bottom: 30px;
+                    padding: 25px;
+                    background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+                    border-radius: 16px;
+                    border: 1px solid #3b82f6;
+                }}
+                .stat-item {{
+                    text-align: center;
+                }}
+                .stat-number {{
+                    font-size: 24px;
+                    font-weight: 700;
+                    color: #1d4ed8;
+                    margin-bottom: 5px;
+                }}
+                .stat-label {{
+                    font-size: 12px;
+                    color: #64748b;
+                    text-transform: uppercase;
+                    font-weight: 500;
+                }}
+                .profile-section {{
+                    margin-bottom: 25px;
+                }}
+                .section-title {{
+                    font-size: 18px;
+                    font-weight: 600;
+                    color: #1e293b;
+                    margin-bottom: 15px;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                }}
+                .form-group {{
+                    margin-bottom: 20px;
+                }}
+                .form-label {{
+                    display: block;
+                    font-size: 14px;
+                    font-weight: 600;
+                    color: #374151;
+                    margin-bottom: 6px;
+                }}
+                .form-control {{
+                    width: 100%;
+                    padding: 12px 16px;
+                    border: 2px solid #e5e7eb;
+                    border-radius: 8px;
+                    font-size: 14px;
+                    transition: border-color 0.3s ease;
+                    background: #f9fafb;
+                }}
+                .form-control:focus {{
+                    outline: none;
+                    border-color: #3b82f6;
+                    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+                    background: white;
+                }}
+                .form-control.textarea {{
+                    resize: vertical;
+                    min-height: 100px;
+                }}
+                .checkbox-group {{
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    padding: 15px;
+                    background: #f8fafc;
+                    border-radius: 8px;
+                    border: 1px solid #e2e8f0;
+                    margin-bottom: 15px;
+                }}
+                .checkbox-group input[type="checkbox"] {{
+                    width: 18px;
+                    height: 18px;
+                    accent-color: #3b82f6;
+                }}
+                .checkbox-group label {{
+                    font-size: 14px;
+                    color: #374151;
+                    cursor: pointer;
+                }}
+                .btn {{
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 8px;
+                    padding: 12px 24px;
+                    border-radius: 8px;
+                    text-decoration: none;
+                    font-weight: 600;
+                    font-size: 14px;
+                    transition: all 0.3s ease;
+                    cursor: pointer;
+                    border: none;
+                }}
+                .btn-primary {{
+                    background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+                    color: white;
+                }}
+                .btn-secondary {{
+                    background: #f1f5f9;
+                    color: #475569;
+                    border: 1px solid #e2e8f0;
+                }}
+                .btn:hover {{
+                    transform: translateY(-2px);
+                    box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+                }}
+                .actions {{
+                    display: flex;
+                    gap: 15px;
+                    justify-content: center;
+                    flex-wrap: wrap;
+                    margin-top: 30px;
+                    padding-top: 25px;
+                    border-top: 1px solid #e2e8f0;
+                }}
+                .success-message {{
+                    background: #dcfce7;
+                    border: 1px solid #16a34a;
+                    color: #15803d;
+                    padding: 12px 16px;
+                    border-radius: 8px;
+                    margin-bottom: 20px;
+                    font-size: 14px;
+                }}
+                @media (max-width: 640px) {{
+                    body {{ padding: 10px; }}
+                    .container {{ border-radius: 12px; }}
+                    .header, .content {{ padding: 20px; }}
+                    .stats {{ grid-template-columns: 1fr; gap: 15px; }}
+                    .actions {{ flex-direction: column; }}
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <div class="avatar">
+                        {escape(user.get_full_name() or user.username)[0].upper()}
+                    </div>
+                    <div class="name">{escape(user.get_full_name() or user.username)}</div>
+                    <div class="event">Networking Profile for {escape(event.name)}</div>
+                </div>
+                
+                <div class="content">
+                    <div class="stats">
+                        <div class="stat-item">
+                            <div class="stat-number">{total_connections}</div>
+                            <div class="stat-label">Total Connections</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-number">{event_connections}</div>
+                            <div class="stat-label">This Event</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-number">{total_points}</div>
+                            <div class="stat-label">Points Earned</div>
+                        </div>
+                    </div>
+                    
+                    <form method="POST" action="/networking/profile/{user_id}/{event_id}/update/">
+                        <input type="hidden" name="csrfmiddlewaretoken" value="{csrf_token}">
+                        
+                        <div class="profile-section">
+                            <div class="section-title">
+                                <span>👤</span> Profile Information
+                            </div>
+                            
+                            <div class="form-group">
+                                <label class="form-label" for="company">Company</label>
+                                <input type="text" id="company" name="company" class="form-control" 
+                                       value="{escape(profile.company or '')}" placeholder="Your company name">
+                            </div>
+                            
+                            <div class="form-group">
+                                <label class="form-label" for="industry">Industry</label>
+                                <input type="text" id="industry" name="industry" class="form-control" 
+                                       value="{escape(profile.industry or '')}" placeholder="e.g. Technology, Healthcare, Finance">
+                            </div>
+                            
+                            <div class="form-group">
+                                <label class="form-label" for="interests">Interests</label>
+                                <input type="text" id="interests" name="interests" class="form-control" 
+                                       value="{escape(profile.interests or '')}" placeholder="e.g. AI, Marketing, Startups (comma separated)">
+                            </div>
+                            
+                            <div class="form-group">
+                                <label class="form-label" for="bio">Bio</label>
+                                <textarea id="bio" name="bio" class="form-control textarea" 
+                                          placeholder="Tell others about yourself and what you do...">{escape(profile.bio or '')}</textarea>
+                            </div>
+                        </div>
+                        
+                        <div class="profile-section">
+                            <div class="section-title">
+                                <span>🔒</span> Privacy Settings
+                            </div>
+                            
+                            <div class="checkbox-group">
+                                <input type="checkbox" id="visible_in_directory" name="visible_in_directory" 
+                                       {"checked" if profile.visible_in_directory else ""}>
+                                <label for="visible_in_directory">Show my profile in the attendee directory</label>
+                            </div>
+                            
+                            <div class="checkbox-group">
+                                <input type="checkbox" id="allow_contact_sharing" name="allow_contact_sharing" 
+                                       {"checked" if profile.allow_contact_sharing else ""}>
+                                <label for="allow_contact_sharing">Allow others to see my contact information when we connect</label>
+                            </div>
+                        </div>
+                        
+                        <div class="actions">
+                            <button type="submit" class="btn btn-primary">
+                                <span>💾</span> Save Profile
+                            </button>
+                            <a href="javascript:history.back()" class="btn btn-secondary">
+                                <span>←</span> Back to Ticket
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </body>
+        </html>
+        '''
+        
+        return HttpResponse(html)
+        
+    except User.DoesNotExist:
+        logger.error(f"User with id {user_id} not found for profile page")
+        return HttpResponse("User not found", status=404)
+    except Event.DoesNotExist:
+        logger.error(f"Event with id {event_id} not found for profile page")
+        return HttpResponse("Event not found", status=404)
+    except Exception as e:
+        logger.error(f"Error loading networking profile for user {user_id}, event {event_id}: {str(e)}")
+        return HttpResponse("An error occurred while loading your profile. Please try again.", status=500)
+
+
+@login_required
+@require_http_methods(["POST"])
+def update_networking_profile(request: HttpRequest, user_id: int, event_id: int) -> HttpResponse:
+    """Handle profile updates"""
+    try:
+        user = get_object_or_404(User, id=user_id)
+        event = get_object_or_404(Event, id=event_id)
+        
+        # Authorization check - users can only update their own profile
+        if request.user.id != user_id:
+            return HttpResponse("Unauthorized: You can only update your own profile", status=403)
+        
+        # Get or create networking profile
+        profile, created = NetworkingProfile.objects.get_or_create(user=user)
+        
+        # Validate and sanitize input data
+        company = request.POST.get('company', '').strip()[:100]  # Limit length
+        industry = request.POST.get('industry', '').strip()[:100]
+        interests = request.POST.get('interests', '').strip()[:500]
+        bio = request.POST.get('bio', '').strip()[:1000]
+        
+        # Basic validation
+        if len(company) > 100:
+            return HttpResponse("Company name too long", status=400)
+        if len(bio) > 1000:
+            return HttpResponse("Bio too long", status=400)
+        
+        # Update profile fields
+        profile.company = company
+        profile.industry = industry
+        profile.interests = interests
+        profile.bio = bio
+        profile.visible_in_directory = 'visible_in_directory' in request.POST
+        profile.allow_contact_sharing = 'allow_contact_sharing' in request.POST
+        
+        profile.save()
+        logger.info(f"Profile updated successfully for user {user_id}")
+        
+        # Redirect back to profile page with success message
+        return redirect(f'/networking/profile/{user_id}/{event_id}/?updated=1')
+        
+    except User.DoesNotExist:
+        logger.error(f"User with id {user_id} not found for profile update")
+        return HttpResponse("User not found", status=404)
+    except Event.DoesNotExist:
+        logger.error(f"Event with id {event_id} not found for profile update")
+        return HttpResponse("Event not found", status=404)
+    except ValidationError as e:
+        logger.warning(f"Validation error updating profile for user {user_id}: {str(e)}")
+        return HttpResponse("Invalid data provided", status=400)
+    except Exception as e:
+        logger.error(f"Error updating networking profile for user {user_id}, event {event_id}: {str(e)}")
+        return HttpResponse("An error occurred while updating your profile. Please try again.", status=500)
