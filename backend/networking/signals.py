@@ -1,12 +1,31 @@
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.contrib.auth.models import User
-from .models import Connection, NetworkingProfile
+from events.models import Event
+from .models import Connection, NetworkingProfile, EventNetworkingSettings
 from gamification.models import AttendeeProfile, Achievement
 from gamification.services import GamificationStatsService
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+@receiver(post_save, sender=Event)
+def create_event_networking_settings(sender, instance, created, **kwargs):
+    """Automatically create networking settings when a new event is created"""
+    if created:
+        EventNetworkingSettings.objects.create(
+            event=instance,
+            enable_networking=True,
+            enable_qr_exchange=True,
+            enable_attendee_directory=True,
+            enable_contact_export=True,
+            allow_industry_filter=True,
+            allow_interest_filter=True,
+            allow_company_filter=True,
+            networking_points_enabled=True
+        )
+        logger.info(f"Created networking settings for event: {instance.name}")
 
 
 @receiver(post_save, sender=User)
