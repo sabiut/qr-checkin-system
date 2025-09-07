@@ -28,7 +28,7 @@ class NetworkingQRService:
             )
             
             # Create QR code data URL
-            qr_data = f"{getattr(settings, 'FRONTEND_URL', 'http://localhost:3000')}/networking/connect/{profile.networking_qr_token}?event={event.id}"
+            qr_data = f"{getattr(settings, 'BASE_URL', 'http://localhost:3000')}/networking/connect/{profile.networking_qr_token}?event={event.id}"
             
             # Generate QR code
             qr = qrcode.QRCode(

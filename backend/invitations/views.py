@@ -873,6 +873,9 @@ class InvitationViewSet(viewsets.ModelViewSet):
                     f'<a href="/networking/connections/{invitation.event.id}/" class="networking-btn">',
                     '<span>🔗</span> My Connections',
                     '</a>',
+                    f'<a href="/networking/profile/{user.id}/{invitation.event.id}/" class="networking-btn">',
+                    '<span>👤</span> My Profile',
+                    '</a>',
                     '</div>'
                 ])
                 
