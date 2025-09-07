@@ -80,86 +80,324 @@ class InvitationViewSet(viewsets.ModelViewSet):
         
         base_style = """
         <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        
         .gamification-section {
-            margin: 30px 20px;
-            padding: 20px;
+            margin: 40px auto;
+            max-width: 800px;
+            padding: 0;
+            background: #ffffff;
+            border-radius: 20px;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.1);
+            overflow: hidden;
+            animation: slideUp 0.5s ease-out;
+        }
+        
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .gamification-header-wrapper {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border-radius: 10px;
-            color: white;
-            font-family: Arial, sans-serif;
+            padding: 30px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
         }
+        
+        .gamification-header-wrapper::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+            animation: shimmer 3s infinite;
+        }
+        
+        @keyframes shimmer {
+            0%, 100% { transform: translate(0, 0); }
+            50% { transform: translate(-50px, -50px); }
+        }
+        
         .gamification-header {
-            text-align: center;
-            margin-bottom: 20px;
-            font-size: 24px;
-            font-weight: bold;
+            color: white;
+            font-size: 28px;
+            font-weight: 700;
+            margin: 0;
+            position: relative;
+            z-index: 1;
+            letter-spacing: -0.5px;
         }
+        
+        .gamification-subtitle {
+            color: rgba(255,255,255,0.9);
+            font-size: 16px;
+            margin-top: 8px;
+            font-weight: 400;
+        }
+        
+        .gamification-content {
+            padding: 30px;
+        }
+        
         .account-prompt {
-            text-align: center;
-            background: rgba(255,255,255,0.1);
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 15px;
+            background: linear-gradient(135deg, #f6f8fb 0%, #e9ecef 100%);
+            padding: 25px;
+            border-radius: 16px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(0,0,0,0.05);
         }
+        
+        .account-prompt p {
+            color: #2d3748;
+            line-height: 1.6;
+            margin: 10px 0;
+        }
+        
         .user-stats {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 15px;
-            margin: 20px 0;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 20px;
+            margin: 25px 0;
         }
+        
         .stat-card {
-            background: rgba(255,255,255,0.1);
-            padding: 15px;
-            border-radius: 8px;
+            background: white;
+            padding: 20px;
+            border-radius: 16px;
             text-align: center;
+            border: 2px solid #e9ecef;
+            transition: all 0.3s ease;
+            cursor: pointer;
         }
+        
+        .stat-card:hover {
+            transform: translateY(-5px);
+            border-color: #667eea;
+            box-shadow: 0 10px 30px rgba(102,126,234,0.1);
+        }
+        
         .stat-number {
-            font-size: 28px;
-            font-weight: bold;
+            font-size: 36px;
+            font-weight: 700;
+            color: #667eea;
             margin-bottom: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
         }
+        
         .stat-label {
             font-size: 14px;
-            opacity: 0.9;
+            color: #718096;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
+        
+        .badges-container {
+            background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
+            padding: 20px;
+            border-radius: 16px;
+            margin: 20px 0;
+        }
+        
+        .badges-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #4a5568;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        
         .badges {
             display: flex;
             justify-content: center;
-            gap: 10px;
+            gap: 12px;
             flex-wrap: wrap;
-            margin: 15px 0;
         }
+        
         .badge {
-            font-size: 24px;
-            background: rgba(255,255,255,0.2);
-            padding: 8px 12px;
-            border-radius: 20px;
-            border: 2px solid rgba(255,255,255,0.3);
-        }
-        .register-btn, .login-btn {
-            background: #4CAF50;
-            color: white;
-            padding: 12px 24px;
-            border: none;
-            border-radius: 25px;
-            font-size: 16px;
-            font-weight: bold;
+            font-size: 32px;
+            background: white;
+            padding: 12px 16px;
+            border-radius: 12px;
+            border: 2px solid #e9ecef;
+            transition: all 0.3s ease;
             cursor: pointer;
-            margin: 5px;
+            position: relative;
+        }
+        
+        .badge:hover {
+            transform: scale(1.1) rotate(5deg);
+            border-color: #667eea;
+            box-shadow: 0 5px 20px rgba(102,126,234,0.2);
+        }
+        
+        .badge-tooltip {
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #2d3748;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            white-space: nowrap;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+        }
+        
+        .badge:hover .badge-tooltip {
+            opacity: 1;
+        }
+        
+        .register-btn, .login-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 16px 32px;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            margin: 10px 5px;
             text-decoration: none;
             display: inline-block;
-            transition: background 0.3s;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(102,126,234,0.3);
+            position: relative;
+            overflow: hidden;
         }
+        
+        .register-btn::before, .login-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: left 0.5s;
+        }
+        
+        .register-btn:hover::before, .login-btn:hover::before {
+            left: 100%;
+        }
+        
         .register-btn:hover, .login-btn:hover {
-            background: #45a049;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102,126,234,0.4);
             color: white;
             text-decoration: none;
         }
+        
         .login-btn {
-            background: #2196F3;
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
         }
-        .login-btn:hover {
-            background: #1976D2;
+        
+        .feature-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-top: 20px;
+        }
+        
+        .feature-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            background: white;
+            border-radius: 10px;
+            color: #4a5568;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+        
+        .feature-item:hover {
+            background: #f7fafc;
+            transform: translateX(5px);
+        }
+        
+        .feature-icon {
+            font-size: 20px;
+            width: 30px;
+            text-align: center;
+        }
+        
+        .progress-container {
+            background: #f7fafc;
+            border-radius: 16px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        
+        .progress-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        .progress-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #2d3748;
+        }
+        
+        .progress-percentage {
+            font-size: 14px;
+            font-weight: 600;
+            color: #667eea;
+        }
+        
+        .progress-bar-wrapper {
+            background: #e9ecef;
+            height: 12px;
+            border-radius: 6px;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .progress-bar {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 100%;
+            border-radius: 6px;
+            transition: width 1s ease-out;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .progress-bar::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+            animation: progressShine 2s infinite;
+        }
+        
+        @keyframes progressShine {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+        
+        .progress-description {
+            margin-top: 10px;
+            font-size: 14px;
+            color: #718096;
         }
         </style>
         """
@@ -170,25 +408,53 @@ class InvitationViewSet(viewsets.ModelViewSet):
         if not user_account_exists:
             # User doesn't have an account - encourage registration
             html_parts.extend([
-                '<div class="gamification-header">🎮 Unlock Event Rewards!</div>',
+                '<div class="gamification-header-wrapper">',
+                '<div class="gamification-header">🎮 Unlock Event Rewards</div>',
+                '<div class="gamification-subtitle">Join our exclusive rewards program</div>',
+                '</div>',
+                '<div class="gamification-content">',
                 '<div class="account-prompt">',
-                '<p><strong>Create an account to earn points, badges, and climb the leaderboard!</strong></p>',
-                '<p>Track your attendance streaks, collect achievement badges, and compete with other event attendees.</p>',
-                f'<a href="/api/auth/register-page/?email={invitation.guest_email}&next=/tickets/{invitation.id}/" class="register-btn">Create Account</a>',
-                '<p style="margin-top: 15px; font-size: 14px; opacity: 0.8;">',
-                '🏆 Earn badges for punctuality, attendance streaks, and more<br>',
-                '📊 Climb leaderboards and track your progress<br>',
-                '🔥 Build attendance streaks and unlock special rewards',
-                '</p>',
+                '<p style="font-size: 18px; font-weight: 600; color: #2d3748; margin-bottom: 15px;">Start earning points and badges today!</p>',
+                '<p>Track your attendance, collect achievement badges, and compete with other attendees on our leaderboard.</p>',
+                '<div style="text-align: center; margin: 25px 0;">',
+                f'<a href="/api/auth/register-page/?email={invitation.guest_email}&next=/tickets/{invitation.id}/" class="register-btn">Create Your Account</a>',
+                '</div>',
+                '</div>',
+                '<div class="feature-list">',
+                '<div class="feature-item">',
+                '<span class="feature-icon">🏆</span>',
+                '<span>Earn exclusive badges for achievements</span>',
+                '</div>',
+                '<div class="feature-item">',
+                '<span class="feature-icon">📊</span>',
+                '<span>Track your progress on live leaderboards</span>',
+                '</div>',
+                '<div class="feature-item">',
+                '<span class="feature-icon">🔥</span>',
+                '<span>Build attendance streaks for bonus rewards</span>',
+                '</div>',
+                '<div class="feature-item">',
+                '<span class="feature-icon">🎯</span>',
+                '<span>Complete challenges and unlock special perks</span>',
+                '</div>',
+                '</div>',
                 '</div>'
             ])
         elif not is_authenticated:
             # User has account but not logged in
             html_parts.extend([
-                '<div class="gamification-header">🔐 Login to See Your Stats!</div>',
+                '<div class="gamification-header-wrapper">',
+                '<div class="gamification-header">🔐 Welcome Back!</div>',
+                '<div class="gamification-subtitle">Login to view your rewards</div>',
+                '</div>',
+                '<div class="gamification-content">',
                 '<div class="account-prompt">',
-                '<p>You have a gamification account! Login to see your points, badges, and streak.</p>',
-                f'<a href="/api/auth/login-page/?email={invitation.guest_email}&next=/tickets/{invitation.id}/" class="login-btn">Login</a>',
+                '<p style="font-size: 18px; font-weight: 600; color: #2d3748; margin-bottom: 15px;">Your account is waiting!</p>',
+                '<p>Access your points, badges, and attendance streak by logging in.</p>',
+                '<div style="text-align: center; margin: 25px 0;">',
+                f'<a href="/api/auth/login-page/?email={invitation.guest_email}&next=/tickets/{invitation.id}/" class="login-btn">Login to Your Account</a>',
+                '</div>',
+                '</div>',
                 '</div>'
             ])
         elif user_stats:
@@ -197,22 +463,42 @@ class InvitationViewSet(viewsets.ModelViewSet):
             badges = user_stats['badges']
             
             html_parts.extend([
-                '<div class="gamification-header">🎮 Your Event Stats</div>',
+                '<div class="gamification-header-wrapper">',
+                '<div class="gamification-header">🎮 Your Event Dashboard</div>',
+                '<div class="gamification-subtitle">Track your achievements and progress</div>',
+                '</div>',
+                '<div class="gamification-content">',
                 '<div class="user-stats">',
-                f'<div class="stat-card"><div class="stat-number">{profile.total_points}</div><div class="stat-label">Points</div></div>',
-                f'<div class="stat-card"><div class="stat-number">{profile.current_streak}🔥</div><div class="stat-label">Current Streak</div></div>',
-                f'<div class="stat-card"><div class="stat-number">{profile.total_events_attended}</div><div class="stat-label">Events Attended</div></div>',
-                f'<div class="stat-card"><div class="stat-number">{profile.level}</div><div class="stat-label">Level</div></div>',
+                f'<div class="stat-card">',
+                f'<div class="stat-number">{profile.total_points}</div>',
+                f'<div class="stat-label">Total Points</div>',
+                f'</div>',
+                f'<div class="stat-card">',
+                f'<div class="stat-number">{profile.current_streak}<span style="margin-left: 5px;">🔥</span></div>',
+                f'<div class="stat-label">Day Streak</div>',
+                f'</div>',
+                f'<div class="stat-card">',
+                f'<div class="stat-number">{profile.total_events_attended}</div>',
+                f'<div class="stat-label">Events</div>',
+                f'</div>',
+                f'<div class="stat-card">',
+                f'<div class="stat-number">{profile.level}</div>',
+                f'<div class="stat-label">Level</div>',
+                f'</div>',
                 '</div>'
             ])
             
             if badges.exists():
-                html_parts.append('<div class="badges">')
+                html_parts.extend([
+                    '<div class="badges-container">',
+                    '<div class="badges-title">Your Achievements</div>',
+                    '<div class="badges">'
+                ])
                 for user_badge in badges[:5]:  # Show first 5 badges
-                    html_parts.append(f'<div class="badge" title="{user_badge.badge.name}: {user_badge.badge.description}">{user_badge.badge.icon}</div>')
+                    html_parts.append(f'<div class="badge"><span class="badge-tooltip">{user_badge.badge.name}</span>{user_badge.badge.icon}</div>')
                 if badges.count() > 5:
                     html_parts.append(f'<div class="badge">+{badges.count() - 5}</div>')
-                html_parts.append('</div>')
+                html_parts.extend(['</div>', '</div>'])
             
             # Next badge progress
             if user_stats.get('next_badge'):
@@ -225,13 +511,15 @@ class InvitationViewSet(viewsets.ModelViewSet):
                     progress = next_badge_data['progress']
                     
                     html_parts.extend([
-                        '<div class="account-prompt">',
-                        f'<p><strong>Next Badge: {next_badge.icon} {next_badge.name}</strong></p>',
-                        f'<p>{next_badge.description}</p>',
-                        f'<div style="background: rgba(255,255,255,0.2); height: 8px; border-radius: 4px; margin: 10px 0;">',
-                        f'<div style="background: #4CAF50; height: 8px; border-radius: 4px; width: {progress:.1f}%;"></div>',
-                        f'</div>',
-                        f'<p style="font-size: 14px; opacity: 0.8;">{progress:.1f}% complete</p>',
+                        '<div class="progress-container">',
+                        '<div class="progress-header">',
+                        f'<div class="progress-title">{next_badge.icon} Next: {next_badge.name}</div>',
+                        f'<div class="progress-percentage">{progress:.0f}%</div>',
+                        '</div>',
+                        '<div class="progress-bar-wrapper">',
+                        f'<div class="progress-bar" style="width: {progress:.1f}%;"></div>',
+                        '</div>',
+                        f'<div class="progress-description">{next_badge.description}</div>',
                         '</div>'
                     ])
                 elif next_badge_data:
@@ -240,17 +528,21 @@ class InvitationViewSet(viewsets.ModelViewSet):
                     progress = 0
                     
                     html_parts.extend([
-                        '<div class="account-prompt">',
-                        f'<p><strong>Next Badge: {next_badge.icon} {next_badge.name}</strong></p>',
-                        f'<p>{next_badge.description}</p>',
-                        f'<div style="background: rgba(255,255,255,0.2); height: 8px; border-radius: 4px; margin: 10px 0;">',
-                        f'<div style="background: #4CAF50; height: 8px; border-radius: 4px; width: {progress:.1f}%;"></div>',
-                        f'</div>',
-                        f'<p style="font-size: 14px; opacity: 0.8;">{progress:.1f}% complete</p>',
+                        '<div class="progress-container">',
+                        '<div class="progress-header">',
+                        f'<div class="progress-title">{next_badge.icon} Next: {next_badge.name}</div>',
+                        f'<div class="progress-percentage">{progress:.0f}%</div>',
+                        '</div>',
+                        '<div class="progress-bar-wrapper">',
+                        f'<div class="progress-bar" style="width: {progress:.1f}%;"></div>',
+                        '</div>',
+                        f'<div class="progress-description">{next_badge.description}</div>',
                         '</div>'
                     ])
+            
+            html_parts.append('</div>')  # Close gamification-content
         
-        html_parts.append('</div>')
+        html_parts.append('</div>')  # Close gamification-section
         return ''.join(html_parts)
     
     def _generate_feedback_html(self, invitation, is_event_ended=False):
@@ -280,51 +572,212 @@ class InvitationViewSet(viewsets.ModelViewSet):
         
         base_style = """
         <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        
         .feedback-section {
-            margin: 30px 20px;
-            padding: 20px;
+            margin: 40px auto;
+            max-width: 800px;
+            padding: 0;
+            background: #ffffff;
+            border-radius: 20px;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.1);
+            overflow: hidden;
+            animation: slideUp 0.5s ease-out;
+        }
+        
+        .feedback-header-wrapper {
             background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-            border-radius: 10px;
-            color: white;
-            font-family: Arial, sans-serif;
+            padding: 30px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
         }
+        
+        .feedback-header-wrapper::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+            animation: shimmer 3s infinite;
+        }
+        
         .feedback-header {
-            text-align: center;
-            margin-bottom: 20px;
-            font-size: 24px;
-            font-weight: bold;
-        }
-        .feedback-prompt {
-            text-align: center;
-            background: rgba(255,255,255,0.1);
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 15px;
-        }
-        .feedback-btn {
-            background: #f59e0b;
             color: white;
-            padding: 12px 24px;
-            border: none;
-            border-radius: 25px;
+            font-size: 28px;
+            font-weight: 700;
+            margin: 0;
+            position: relative;
+            z-index: 1;
+            letter-spacing: -0.5px;
+        }
+        
+        .feedback-subtitle {
+            color: rgba(255,255,255,0.9);
             font-size: 16px;
-            font-weight: bold;
+            margin-top: 8px;
+            font-weight: 400;
+        }
+        
+        .feedback-content {
+            padding: 30px;
+        }
+        
+        .feedback-prompt {
+            background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+            padding: 25px;
+            border-radius: 16px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(16,185,129,0.1);
+        }
+        
+        .feedback-prompt p {
+            color: #2d3748;
+            line-height: 1.6;
+            margin: 10px 0;
+        }
+        
+        .points-breakdown {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        
+        .points-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            background: white;
+            border-radius: 10px;
+            border: 1px solid #e5e7eb;
+            transition: all 0.3s ease;
+        }
+        
+        .points-item:hover {
+            transform: translateX(5px);
+            border-color: #10b981;
+            box-shadow: 0 5px 15px rgba(16,185,129,0.1);
+        }
+        
+        .points-icon {
+            font-size: 20px;
+            width: 30px;
+            text-align: center;
+        }
+        
+        .points-text {
+            flex: 1;
+            color: #4a5568;
+            font-size: 14px;
+        }
+        
+        .points-value {
+            font-weight: 600;
+            color: #10b981;
+            font-size: 16px;
+        }
+        
+        .feedback-btn {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+            padding: 16px 32px;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
             cursor: pointer;
-            margin: 5px;
+            margin: 10px 5px;
             text-decoration: none;
             display: inline-block;
-            transition: background 0.3s;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(16,185,129,0.3);
+            position: relative;
+            overflow: hidden;
         }
+        
+        .feedback-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: left 0.5s;
+        }
+        
+        .feedback-btn:hover::before {
+            left: 100%;
+        }
+        
         .feedback-btn:hover {
-            background: #d97706;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(16,185,129,0.4);
             color: white;
             text-decoration: none;
         }
-        .feedback-completed {
-            background: #22c55e;
+        
+        .feedback-completed-card {
+            background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+            border-radius: 16px;
+            padding: 30px;
+            text-align: center;
+            border: 2px solid #10b981;
         }
-        .feedback-completed:hover {
-            background: #16a34a;
+        
+        .feedback-completed-icon {
+            font-size: 64px;
+            margin-bottom: 20px;
+            animation: bounce 1s ease-out;
+        }
+        
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-20px); }
+        }
+        
+        .feedback-completed-title {
+            font-size: 24px;
+            font-weight: 700;
+            color: #059669;
+            margin-bottom: 10px;
+        }
+        
+        .feedback-completed-message {
+            color: #4a5568;
+            font-size: 16px;
+            line-height: 1.6;
+        }
+        
+        .feedback-pending-card {
+            background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+            border-radius: 16px;
+            padding: 25px;
+            text-align: center;
+            border: 1px solid rgba(245,158,11,0.2);
+        }
+        
+        .feedback-pending-icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+        }
+        
+        .feedback-pending-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: #92400e;
+            margin-bottom: 10px;
+        }
+        
+        .feedback-pending-message {
+            color: #78350f;
+            font-size: 15px;
+            line-height: 1.5;
         }
         </style>
         """
@@ -335,36 +788,79 @@ class InvitationViewSet(viewsets.ModelViewSet):
         if has_feedback:
             # Already submitted feedback
             html_parts.extend([
-                '<div class="feedback-header">✅ Thank You for Your Feedback!</div>',
-                '<div class="feedback-prompt">',
-                '<p>Your feedback has been received and helps us improve future events.</p>',
-                '<p>🎮 You earned points for providing valuable feedback!</p>',
+                '<div class="feedback-header-wrapper">',
+                '<div class="feedback-header">✅ Feedback Complete</div>',
+                '<div class="feedback-subtitle">Thank you for your valuable input</div>',
+                '</div>',
+                '<div class="feedback-content">',
+                '<div class="feedback-completed-card">',
+                '<div class="feedback-completed-icon">🎉</div>',
+                '<div class="feedback-completed-title">Your Feedback Has Been Received!</div>',
+                '<div class="feedback-completed-message">',
+                '<p>Thank you for taking the time to share your experience.</p>',
+                '<p>Your feedback helps us create better events in the future.</p>',
+                '<p style="margin-top: 15px; color: #10b981; font-weight: 600;">🎮 You earned gamification points for your feedback!</p>',
+                '</div>',
+                '</div>',
                 '</div>'
             ])
         elif not is_event_ended:
             # Event hasn't ended yet
             html_parts.extend([
-                '<div class="feedback-header">📝 Share Your Experience</div>',
-                '<div class="feedback-prompt">',
-                '<p>Enjoying the event? Your feedback will be available after the event ends.</p>',
-                '<p>💡 <strong>Tip:</strong> Complete feedback to earn extra gamification points!</p>',
+                '<div class="feedback-header-wrapper">',
+                '<div class="feedback-header">📝 Feedback Coming Soon</div>',
+                '<div class="feedback-subtitle">Share your experience after the event</div>',
+                '</div>',
+                '<div class="feedback-content">',
+                '<div class="feedback-pending-card">',
+                '<div class="feedback-pending-icon">⏰</div>',
+                '<div class="feedback-pending-title">Feedback Opens After Event</div>',
+                '<div class="feedback-pending-message">',
+                '<p>We hope you\'re enjoying the event!</p>',
+                '<p>You\'ll be able to share your feedback once the event concludes.</p>',
+                '<p style="margin-top: 15px;">💡 <strong>Pro tip:</strong> Complete your feedback to earn bonus gamification points!</p>',
+                '</div>',
+                '</div>',
                 '</div>'
             ])
         else:
             # Event ended, show feedback form
             feedback_url = f"/api/feedback/feedback/?event_id={invitation.event.id}&invitation_id={invitation.id}&email={invitation.guest_email}"
             html_parts.extend([
-                '<div class="feedback-header">📝 How Was the Event?</div>',
+                '<div class="feedback-header-wrapper">',
+                '<div class="feedback-header">📝 Share Your Experience</div>',
+                '<div class="feedback-subtitle">Help us improve future events</div>',
+                '</div>',
+                '<div class="feedback-content">',
                 '<div class="feedback-prompt">',
-                '<p>Your feedback helps us improve future events and earns you gamification points!</p>',
-                '<p><strong>Earn up to 35 points</strong> for detailed feedback:</p>',
-                '<ul style="text-align: left; margin: 10px 0; padding-left: 20px;">',
-                '<li>🌟 15 points for rating the event</li>',
-                '<li>✍️ +5 points for each detailed comment section</li>',
-                '<li>🚀 +5 points for NPS promoter rating</li>',
-                '<li>👍 +3 points for recommending the event</li>',
-                '</ul>',
+                '<p style="font-size: 18px; font-weight: 600; color: #2d3748; margin-bottom: 15px;">Your feedback matters to us!</p>',
+                '<p>Take a moment to share your thoughts and earn rewards.</p>',
+                '</div>',
+                '<div class="points-breakdown">',
+                '<div class="points-item">',
+                '<span class="points-icon">⭐</span>',
+                '<span class="points-text">Overall rating</span>',
+                '<span class="points-value">15 pts</span>',
+                '</div>',
+                '<div class="points-item">',
+                '<span class="points-icon">✍️</span>',
+                '<span class="points-text">Detailed comments</span>',
+                '<span class="points-value">+5 pts</span>',
+                '</div>',
+                '<div class="points-item">',
+                '<span class="points-icon">🚀</span>',
+                '<span class="points-text">NPS promoter</span>',
+                '<span class="points-value">+5 pts</span>',
+                '</div>',
+                '<div class="points-item">',
+                '<span class="points-icon">👍</span>',
+                '<span class="points-text">Would recommend</span>',
+                '<span class="points-value">+3 pts</span>',
+                '</div>',
+                '</div>',
+                '<div style="text-align: center; margin-top: 25px;">',
                 f'<a href="#" onclick="openFeedbackForm()" class="feedback-btn">Share Your Feedback</a>',
+                '</div>',
                 '</div>',
                 '''
                 <script>
