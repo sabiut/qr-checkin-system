@@ -136,6 +136,4 @@ The system is designed to work with limited internet connectivity:
 - Local storage for temporary data storage
 - Tickets can be downloaded and stored locally.
 
-## CI/CD Pipeline Status
-✅ Docker Hub deployment working  
-✅ Container conflicts resolved
+
