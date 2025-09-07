@@ -1591,7 +1591,7 @@ def networking_connect_page(request: HttpRequest, qr_token: str) -> HttpResponse
                     </div>
                     
                     <div class="actions">
-                        <a href="/api/networking/connections/create/?from_user={target_user.id}&to_user=self&event={event.id}&method=qr_scan" 
+                        <a href="/networking/connect-action/?from_user={target_user.id}&to_user=self&event={event.id}&method=qr_scan" 
                            class="btn btn-primary">
                             <span>&#129309;</span> Connect Now
                         </a>
@@ -1613,3 +1613,346 @@ def networking_connect_page(request: HttpRequest, qr_token: str) -> HttpResponse
     except Exception as e:
         logger.error(f"Error handling QR connect for token {qr_token}: {str(e)}")
         return HttpResponse("An error occurred while processing the QR code", status=500)
+
+
+def networking_connect_action(request: HttpRequest) -> HttpResponse:
+    """Handle connection creation from QR scan with user-friendly response"""
+    try:
+        # Get parameters from query string
+        from_user_id = request.GET.get('from_user')
+        to_user = request.GET.get('to_user') 
+        event_id = request.GET.get('event')
+        method = request.GET.get('method', 'qr_scan')
+        
+        if not all([from_user_id, to_user, event_id]):
+            return HttpResponse("Missing required parameters", status=400)
+            
+        # Get the event
+        event = get_object_or_404(Event, id=event_id)
+        
+        # Get the target user (person being connected to)
+        target_user = get_object_or_404(User, id=from_user_id)
+        
+        # Get current user (person doing the connecting)
+        if not request.user.is_authenticated:
+            return redirect(f'/login/?next=/networking/connect-action/?from_user={from_user_id}&to_user={to_user}&event={event_id}&method={method}')
+            
+        current_user = request.user
+        
+        # Prevent self-connection
+        if current_user.id == target_user.id:
+            return HttpResponse("You cannot connect to yourself", status=400)
+            
+        # Check if connection already exists
+        from networking.models import Connection
+        existing_connection = Connection.objects.filter(
+            user1=current_user, user2=target_user, event=event
+        ).first() or Connection.objects.filter(
+            user1=target_user, user2=current_user, event=event
+        ).first()
+        
+        if existing_connection:
+            # Connection already exists - show friendly message
+            success_html = f'''
+            <!DOCTYPE html>
+            <html lang="en">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Already Connected</title>
+                <style>
+                    * {{
+                        margin: 0;
+                        padding: 0;
+                        box-sizing: border-box;
+                    }}
+                    body {{
+                        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                        background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+                        min-height: 100vh;
+                        padding: 20px;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                    }}
+                    .container {{
+                        max-width: 500px;
+                        width: 100%;
+                        background: white;
+                        border-radius: 20px;
+                        box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+                        overflow: hidden;
+                        text-align: center;
+                    }}
+                    .header {{
+                        background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+                        padding: 40px 30px;
+                        color: white;
+                    }}
+                    .icon {{
+                        font-size: 48px;
+                        margin-bottom: 15px;
+                    }}
+                    .title {{
+                        font-size: 24px;
+                        font-weight: 700;
+                        margin-bottom: 10px;
+                    }}
+                    .subtitle {{
+                        font-size: 16px;
+                        opacity: 0.9;
+                    }}
+                    .content {{
+                        padding: 40px 30px;
+                    }}
+                    .message {{
+                        background: #fef3c7;
+                        padding: 20px;
+                        border-radius: 12px;
+                        margin-bottom: 30px;
+                        color: #92400e;
+                        line-height: 1.5;
+                    }}
+                    .actions {{
+                        display: flex;
+                        gap: 15px;
+                        justify-content: center;
+                        flex-wrap: wrap;
+                    }}
+                    .btn {{
+                        display: inline-flex;
+                        align-items: center;
+                        gap: 8px;
+                        padding: 12px 24px;
+                        border-radius: 8px;
+                        text-decoration: none;
+                        font-weight: 600;
+                        font-size: 14px;
+                        transition: all 0.3s ease;
+                        border: none;
+                        cursor: pointer;
+                    }}
+                    .btn-primary {{
+                        background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+                        color: white;
+                    }}
+                    .btn:hover {{
+                        transform: translateY(-2px);
+                        box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+                    }}
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="header">
+                        <div class="icon">&#129309;</div>
+                        <div class="title">Already Connected!</div>
+                        <div class="subtitle">You're already in each other's network</div>
+                    </div>
+                    
+                    <div class="content">
+                        <div class="message">
+                            <strong>Good news!</strong><br>
+                            You and {escape(target_user.get_full_name() or target_user.username)} are already connected 
+                            at {escape(event.name)}. Keep networking with other attendees!
+                        </div>
+                        
+                        <div class="actions">
+                            <a href="/networking/directory/{event.id}/" class="btn btn-primary">
+                                <span>👥</span> Browse More Attendees
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </body>
+            </html>
+            '''
+            return HttpResponse(success_html)
+        
+        # Create new connection
+        Connection.objects.create(
+            user1=current_user,
+            user2=target_user,
+            event=event,
+            connection_method=method,
+            status='confirmed'
+        )
+        
+        # Award gamification points if available
+        try:
+            from gamification.services import GamificationService
+            gamification_service = GamificationService()
+            gamification_service.award_points(current_user, 'networking_connection', event=event)
+            gamification_service.award_points(target_user, 'networking_connection', event=event)
+        except ImportError:
+            pass  # Gamification not available
+        
+        # Create success page
+        success_html = f'''
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Connection Successful</title>
+            <style>
+                * {{
+                    margin: 0;
+                    padding: 0;
+                    box-sizing: border-box;
+                }}
+                body {{
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                    background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+                    min-height: 100vh;
+                    padding: 20px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                }}
+                .container {{
+                    max-width: 500px;
+                    width: 100%;
+                    background: white;
+                    border-radius: 20px;
+                    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+                    overflow: hidden;
+                    text-align: center;
+                }}
+                .header {{
+                    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+                    padding: 40px 30px;
+                    color: white;
+                }}
+                .icon {{
+                    font-size: 48px;
+                    margin-bottom: 15px;
+                }}
+                .title {{
+                    font-size: 24px;
+                    font-weight: 700;
+                    margin-bottom: 10px;
+                }}
+                .subtitle {{
+                    font-size: 16px;
+                    opacity: 0.9;
+                }}
+                .content {{
+                    padding: 40px 30px;
+                }}
+                .avatar {{
+                    width: 80px;
+                    height: 80px;
+                    border-radius: 50%;
+                    background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 32px;
+                    font-weight: bold;
+                    color: white;
+                    margin: 0 auto 20px;
+                }}
+                .user-name {{
+                    font-size: 20px;
+                    font-weight: 600;
+                    color: #1e293b;
+                    margin-bottom: 30px;
+                }}
+                .message {{
+                    background: #d1fae5;
+                    padding: 20px;
+                    border-radius: 12px;
+                    margin-bottom: 30px;
+                    color: #065f46;
+                    line-height: 1.5;
+                }}
+                .points {{
+                    background: #fef3c7;
+                    padding: 15px;
+                    border-radius: 8px;
+                    margin-bottom: 30px;
+                    color: #92400e;
+                    font-weight: 600;
+                }}
+                .actions {{
+                    display: flex;
+                    gap: 15px;
+                    justify-content: center;
+                    flex-wrap: wrap;
+                }}
+                .btn {{
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 8px;
+                    padding: 12px 24px;
+                    border-radius: 8px;
+                    text-decoration: none;
+                    font-weight: 600;
+                    font-size: 14px;
+                    transition: all 0.3s ease;
+                    border: none;
+                    cursor: pointer;
+                }}
+                .btn-primary {{
+                    background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+                    color: white;
+                }}
+                .btn-secondary {{
+                    background: #f1f5f9;
+                    color: #475569;
+                    border: 1px solid #e2e8f0;
+                }}
+                .btn:hover {{
+                    transform: translateY(-2px);
+                    box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <div class="icon">&#9989;</div>
+                    <div class="title">Connected Successfully!</div>
+                    <div class="subtitle">You've made a new connection</div>
+                </div>
+                
+                <div class="content">
+                    <div class="avatar">
+                        {escape(target_user.get_full_name() or target_user.username)[0].upper()}
+                    </div>
+                    <div class="user-name">Connected with {escape(target_user.get_full_name() or target_user.username)}</div>
+                    
+                    <div class="message">
+                        <strong>&#127881; Great job!</strong><br>
+                        You and {escape(target_user.get_full_name() or target_user.username)} are now connected 
+                        in your professional network for {escape(event.name)}.
+                    </div>
+                    
+                    <div class="points">
+                        <span>&#11088;</span> +10 Networking Points Earned!
+                    </div>
+                    
+                    <div class="actions">
+                        <a href="/networking/directory/{event.id}/" class="btn btn-primary">
+                            <span>👥</span> Continue Networking
+                        </a>
+                        <a href="/networking/connections/{event.id}/" class="btn btn-secondary">
+                            <span>&#129309;</span> My Connections
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </body>
+        </html>
+        '''
+        
+        return HttpResponse(success_html)
+        
+    except User.DoesNotExist:
+        return HttpResponse("User not found", status=404)
+    except Event.DoesNotExist:
+        return HttpResponse("Event not found", status=404)
+    except Exception as e:
+        logger.error(f"Error creating connection: {str(e)}")
+        return HttpResponse("An error occurred while creating the connection. Please try again.", status=500)
