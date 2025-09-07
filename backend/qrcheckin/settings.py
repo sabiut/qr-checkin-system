@@ -40,6 +40,7 @@ INSTALLED_APPS = [
     'users',
     'gamification',
     'feedback_system',
+    'networking',
 ]
 
 MIDDLEWARE = [

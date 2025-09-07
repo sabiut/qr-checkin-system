@@ -545,6 +545,354 @@ class InvitationViewSet(viewsets.ModelViewSet):
         html_parts.append('</div>')  # Close gamification-section
         return ''.join(html_parts)
     
+    def _generate_networking_html(self, invitation, user_account_exists, user_stats, is_authenticated):
+        """Generate HTML section for networking features."""
+        if not invitation.guest_email:
+            return ""
+        
+        # Check if networking is enabled for this event
+        try:
+            networking_settings = getattr(invitation.event, 'networking_settings', None)
+            if not networking_settings or not networking_settings.enable_networking:
+                return ""  # Networking not enabled for this event
+        except Exception as e:
+            logger.warning(f"Could not check networking settings: {e}")
+            return ""
+        
+        base_style = """
+        <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        
+        .networking-section {
+            margin: 40px auto;
+            max-width: 800px;
+            padding: 0;
+            background: #ffffff;
+            border-radius: 20px;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.1);
+            overflow: hidden;
+            animation: slideUp 0.5s ease-out;
+        }
+        
+        .networking-header-wrapper {
+            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+            padding: 30px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .networking-header-wrapper::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+            animation: shimmer 3s infinite;
+        }
+        
+        .networking-header {
+            color: white;
+            font-size: 28px;
+            font-weight: 700;
+            margin: 0;
+            position: relative;
+            z-index: 1;
+            letter-spacing: -0.5px;
+        }
+        
+        .networking-subtitle {
+            color: rgba(255,255,255,0.9);
+            font-size: 16px;
+            margin-top: 8px;
+            font-weight: 400;
+        }
+        
+        .networking-content {
+            padding: 40px;
+        }
+        
+        .networking-features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin: 30px 0;
+        }
+        
+        .feature-card {
+            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            border: 1px solid #e2e8f0;
+            transition: all 0.3s ease;
+        }
+        
+        .feature-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(99,102,241,0.15);
+            border-color: #6366f1;
+        }
+        
+        .feature-icon {
+            font-size: 32px;
+            margin-bottom: 12px;
+            display: block;
+        }
+        
+        .feature-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #1e293b;
+            margin-bottom: 8px;
+        }
+        
+        .feature-desc {
+            font-size: 14px;
+            color: #64748b;
+            line-height: 1.4;
+        }
+        
+        .networking-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            justify-content: center;
+            margin-top: 30px;
+        }
+        
+        .networking-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .networking-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(99,102,241,0.4);
+            color: white;
+            text-decoration: none;
+        }
+        
+        .networking-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: left 0.5s;
+        }
+        
+        .networking-btn:hover::before {
+            left: 100%;
+        }
+        
+        .networking-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 20px;
+            margin: 30px 0;
+            padding: 25px;
+            background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+            border-radius: 16px;
+            border: 1px solid #0ea5e9;
+        }
+        
+        .stat-item {
+            text-align: center;
+        }
+        
+        .stat-number {
+            font-size: 24px;
+            font-weight: 700;
+            color: #0ea5e9;
+            margin-bottom: 5px;
+        }
+        
+        .stat-label {
+            font-size: 12px;
+            color: #64748b;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        @media (max-width: 640px) {
+            .networking-section { margin: 20px 10px; }
+            .networking-content { padding: 25px 20px; }
+            .networking-features { grid-template-columns: 1fr; }
+            .networking-actions { flex-direction: column; align-items: stretch; }
+            .networking-btn { justify-content: center; }
+        }
+        </style>
+        """
+        
+        html_parts = [base_style]
+        html_parts.append('<div class="networking-section">')
+        
+        if not user_account_exists:
+            # User doesn't have an account - encourage registration for networking
+            html_parts.extend([
+                '<div class="networking-header-wrapper">',
+                '<div class="networking-header">🤝 Connect & Network</div>',
+                '<div class="networking-subtitle">Join to unlock professional networking</div>',
+                '</div>',
+                '<div class="networking-content">',
+                '<div class="feature-card" style="margin: 0; max-width: none;">',
+                '<div class="feature-icon">🌐</div>',
+                '<div class="feature-title">Professional Networking Awaits</div>',
+                '<p style="color: #64748b; margin: 15px 0;">Create your account to connect with other attendees, exchange contacts via QR codes, and build your professional network.</p>',
+                '<div style="margin-top: 25px;">',
+                f'<a href="/api/auth/register-page/?email={invitation.guest_email}&next=/tickets/{invitation.id}/" class="networking-btn">',
+                '<span>🚀</span> Join & Start Networking',
+                '</a>',
+                '</div>',
+                '</div>',
+                '</div>'
+            ])
+        elif not is_authenticated:
+            # User has account but not logged in
+            html_parts.extend([
+                '<div class="networking-header-wrapper">',
+                '<div class="networking-header">🤝 Welcome Back!</div>',
+                '<div class="networking-subtitle">Login to access networking features</div>',
+                '</div>',
+                '<div class="networking-content">',
+                '<div class="feature-card" style="margin: 0; max-width: none;">',
+                '<div class="feature-icon">🔐</div>',
+                '<div class="feature-title">Your Networking Profile Awaits</div>',
+                '<p style="color: #64748b; margin: 15px 0;">Access your networking QR code, browse attendee directory, and manage your professional connections.</p>',
+                '<div style="margin-top: 25px;">',
+                f'<a href="/api/auth/login-page/?email={invitation.guest_email}&next=/tickets/{invitation.id}/" class="networking-btn">',
+                '<span>🔑</span> Login to Network',
+                '</a>',
+                '</div>',
+                '</div>',
+                '</div>'
+            ])
+        else:
+            # User is logged in - show full networking features
+            try:
+                from django.contrib.auth.models import User
+                from networking.models import NetworkingProfile, Connection
+                from django.db import models
+                
+                user = User.objects.get(email=invitation.guest_email)
+                profile, created = NetworkingProfile.objects.get_or_create(
+                    user=user,
+                    defaults={'visible_in_directory': True, 'allow_contact_sharing': True}
+                )
+                
+                # Get networking stats
+                connections_count = Connection.objects.filter(
+                    models.Q(from_user=user) | models.Q(to_user=user),
+                    event=invitation.event
+                ).count()
+                
+                total_connections = Connection.objects.filter(
+                    models.Q(from_user=user) | models.Q(to_user=user)
+                ).count()
+                
+                html_parts.extend([
+                    '<div class="networking-header-wrapper">',
+                    '<div class="networking-header">🤝 Networking Hub</div>',
+                    '<div class="networking-subtitle">Connect with fellow attendees</div>',
+                    '</div>',
+                    '<div class="networking-content">'
+                ])
+                
+                # Show networking stats if user has connections
+                if total_connections > 0:
+                    html_parts.extend([
+                        '<div class="networking-stats">',
+                        '<div class="stat-item">',
+                        f'<div class="stat-number">{total_connections}</div>',
+                        '<div class="stat-label">Total Connections</div>',
+                        '</div>',
+                        '<div class="stat-item">',
+                        f'<div class="stat-number">{connections_count}</div>',
+                        '<div class="stat-label">This Event</div>',
+                        '</div>',
+                        '<div class="stat-item">',
+                        f'<div class="stat-number">{total_connections * 5}</div>',
+                        '<div class="stat-label">Points Earned</div>',
+                        '</div>',
+                        '</div>'
+                    ])
+                
+                # Networking features
+                html_parts.extend([
+                    '<div class="networking-features">',
+                    '<div class="feature-card">',
+                    '<div class="feature-icon">📱</div>',
+                    '<div class="feature-title">My QR Code</div>',
+                    '<div class="feature-desc">Get your networking QR code for instant connections</div>',
+                    '</div>',
+                    '<div class="feature-card">',
+                    '<div class="feature-icon">👥</div>',
+                    '<div class="feature-title">Attendee Directory</div>',
+                    '<div class="feature-desc">Browse and connect with other attendees</div>',
+                    '</div>',
+                    '<div class="feature-card">',
+                    '<div class="feature-icon">🔗</div>',
+                    '<div class="feature-title">My Connections</div>',
+                    '<div class="feature-desc">View and manage your professional network</div>',
+                    '</div>',
+                    '<div class="feature-card">',
+                    '<div class="feature-icon">⚙️</div>',
+                    '<div class="feature-title">Profile Settings</div>',
+                    '<div class="feature-desc">Update your networking preferences</div>',
+                    '</div>',
+                    '</div>'
+                ])
+                
+                # Action buttons
+                html_parts.extend([
+                    '<div class="networking-actions">',
+                    f'<a href="/networking/qr-code/{user.id}/{invitation.event.id}/" class="networking-btn">',
+                    '<span>📱</span> Get My QR Code',
+                    '</a>',
+                    f'<a href="/networking/directory/{invitation.event.id}/" class="networking-btn">',
+                    '<span>👥</span> Browse Attendees',
+                    '</a>',
+                    f'<a href="/networking/connections/{invitation.event.id}/" class="networking-btn">',
+                    '<span>🔗</span> My Connections',
+                    '</a>',
+                    '</div>'
+                ])
+                
+                html_parts.append('</div>')  # Close networking-content
+                
+            except Exception as e:
+                logger.error(f"Error generating networking features: {e}")
+                # Fallback to basic message
+                html_parts.extend([
+                    '<div class="networking-header-wrapper">',
+                    '<div class="networking-header">🤝 Networking Available</div>',
+                    '</div>',
+                    '<div class="networking-content">',
+                    '<p style="text-align: center; color: #64748b;">Networking features are enabled for this event. Connect with other attendees!</p>',
+                    '</div>'
+                ])
+        
+        html_parts.append('</div>')  # Close networking-section
+        return ''.join(html_parts)
+    
     def _generate_feedback_html(self, invitation, is_event_ended=False):
         """Generate HTML section for event feedback."""
         from datetime import datetime
@@ -1216,6 +1564,19 @@ class InvitationViewSet(viewsets.ModelViewSet):
             except Exception as e:
                 logger.error(f"Gamification HTML generation failed: {e}")
                 # Continue without gamification section
+            
+            # Add networking section to the HTML
+            try:
+                networking_html = self._generate_networking_html(invitation, user_account_exists, user_stats, is_viewing_own_ticket)
+                
+                # Insert networking section before the closing body tag
+                if '</body>' in html_content:
+                    html_content = html_content.replace('</body>', f'{networking_html}</body>')
+                else:
+                    html_content += networking_html
+            except Exception as e:
+                logger.error(f"Networking HTML generation failed: {e}")
+                # Continue without networking section
             
             # Add feedback section to the HTML
             try:
