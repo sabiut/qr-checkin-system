@@ -20,7 +20,7 @@ proxy_read_timeout 60s;
 server {
     listen 80;
     server_name eventqr.app www.eventqr.app;
-    client_max_body_size 100M;
+    client_max_body_size 100M;  # Allow large file uploads for media/documents
 
     # Security headers
     add_header X-Content-Type-Options "nosniff" always;
@@ -86,18 +86,20 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    # Static files
+    # Static files (30 day cache for versioned assets)
     location /static/ {
         alias /usr/share/nginx/html/static/;
         expires 30d;
         add_header Cache-Control "public, immutable";
+        add_header Vary "Accept-Encoding";
     }
 
-    # Media files
+    # Media files (7 day cache for user uploads)
     location /media/ {
         alias /usr/share/nginx/html/media/;
         expires 7d;
         add_header Cache-Control "public";
+        add_header Vary "Accept-Encoding";
     }
 
     # Monitoring endpoint (internal only)
@@ -108,8 +110,15 @@ server {
     }
 
     # Custom error pages
-    error_page 502 503 504 /50x.html;
-    location = /50x.html {
+    error_page 400 401 403 404 /4xx.html;
+    error_page 500 501 502 503 504 /5xx.html;
+    
+    location = /4xx.html {
+        root /usr/share/nginx/html;
+        internal;
+    }
+    
+    location = /5xx.html {
         root /usr/share/nginx/html;
         internal;
     }
@@ -119,7 +128,7 @@ server {
 # server {
 #     listen 443 ssl http2;
 #     server_name eventqr.app www.eventqr.app;
-#     client_max_body_size 100M;
+#     client_max_body_size 100M;  # Allow large file uploads for media/documents
 #
 #     # SSL configuration
 #     ssl_certificate /etc/nginx/ssl/cert.pem;
