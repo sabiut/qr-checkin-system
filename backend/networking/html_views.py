@@ -1278,9 +1278,7 @@ def networking_profile_page(request: HttpRequest, user_id: int, event_id: int) -
                         </div>
                     </div>
                     
-                    {f'''<div class="success-message">
-                        <span>&#10004;</span> Your networking profile has been updated successfully!
-                    </div>''' if show_success else ''}
+                    {'<div class="success-message"><span>&#10004;</span> Your networking profile has been updated successfully!</div>' if show_success else ''}
                     
                     <form method="POST" action="/networking/profile/{user_id}/{event_id}/update/">
                         <input type="hidden" name="csrfmiddlewaretoken" value="{csrf_token}">
