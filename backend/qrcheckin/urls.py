@@ -15,6 +15,7 @@ urlpatterns = [
     path('api/auth/', include('users.urls')),
     path('api/gamification/', include('gamification.urls')),
     path('api/feedback/', include('feedback_system.urls')),
+    path('', include('networking.urls')),
     
     # Direct ticket viewing endpoint
     path('tickets/<uuid:pk>/', InvitationViewSet.as_view({'get': 'view_ticket'}), name='view-ticket'),
