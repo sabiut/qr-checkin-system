@@ -5,8 +5,10 @@ from django.contrib.auth.models import User
 from django.utils.html import escape
 from django.contrib import messages
 from django.views.decorators.http import require_http_methods
+from django.views.decorators.csrf import csrf_protect
 from django.middleware.csrf import get_token
 from django.core.exceptions import ValidationError
+from django.db import transaction
 from typing import Union
 from .models import NetworkingProfile, Connection, EventNetworkingSettings
 from .services import NetworkingQRService
@@ -15,6 +17,72 @@ import json
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+def check_existing_connection(user1: User, user2: User, event: Event) -> Union[Connection, None]:
+    """
+    Check if a connection already exists between two users for an event.
+    Returns the existing connection or None.
+    """
+    from django.db.models import Q
+    
+    return Connection.objects.filter(
+        Q(from_user=user1, to_user=user2) |
+        Q(from_user=user2, to_user=user1),
+        event=event
+    ).first()
+
+
+def create_bidirectional_connection(from_user: User, to_user: User, event: Event, method: str = 'qr_scan') -> tuple[Connection, Connection]:
+    """
+    Create a bidirectional connection between two users for an event.
+    Returns tuple of (primary_connection, reverse_connection).
+    
+    Args:
+        from_user: User initiating the connection
+        to_user: User being connected to
+        event: Event where connection is made
+        method: Connection method (qr_scan, directory, manual, etc.)
+    
+    Returns:
+        Tuple of (primary_connection, reverse_connection)
+    
+    Raises:
+        Exception: If connection creation fails
+    """
+    with transaction.atomic():
+        # Create primary connection
+        connection = Connection.objects.create(
+            from_user=from_user,
+            to_user=to_user,
+            event=event,
+            connection_method=method,
+            status='accepted'
+        )
+        logger.info(f"Primary connection created: {connection.id} ({from_user.username} → {to_user.username})")
+        
+        # Create reciprocal connection
+        reverse_connection, created = connection.create_reverse_connection()
+        if created:
+            logger.info(f"Reciprocal connection created: {reverse_connection.id} ({to_user.username} → {from_user.username})")
+        else:
+            logger.info(f"Reciprocal connection already exists: {reverse_connection.id}")
+        
+        # Award gamification points if available
+        try:
+            from gamification.services import GamificationService
+            gamification_service = GamificationService()
+            gamification_service.award_points(from_user, 'networking_connection', event=event)
+            gamification_service.award_points(to_user, 'networking_connection', event=event)
+            logger.info(f"Networking points awarded to {from_user.username} and {to_user.username}")
+        except ImportError:
+            logger.debug("Gamification not available - skipping points")
+        except Exception as e:
+            logger.warning(f"Could not award gamification points: {str(e)}")
+            # Don't raise - connection creation should still succeed
+        
+        return connection, reverse_connection
+
 
 def networking_qr_page(request: HttpRequest, user_id: int, event_id: int) -> HttpResponse:
     """User-friendly QR code page - No auth required for viewing QR codes"""
@@ -1617,6 +1685,7 @@ def networking_connect_page(request: HttpRequest, qr_token: str) -> HttpResponse
         return HttpResponse("An error occurred while processing the QR code", status=500)
 
 
+@csrf_protect
 def networking_connect_action(request: HttpRequest) -> HttpResponse:
     """Handle connection creation from QR scan with user-friendly response"""
     try:
@@ -1775,12 +1844,7 @@ def networking_connect_action(request: HttpRequest) -> HttpResponse:
             return HttpResponse(error_html)
             
         # Check if connection already exists
-        from networking.models import Connection
-        existing_connection = Connection.objects.filter(
-            user1=current_user, user2=qr_code_owner, event=event
-        ).first() or Connection.objects.filter(
-            user1=qr_code_owner, user2=current_user, event=event
-        ).first()
+        existing_connection = check_existing_connection(current_user, qr_code_owner, event)
         
         if existing_connection:
             # Connection already exists - show friendly message
@@ -1900,23 +1964,17 @@ def networking_connect_action(request: HttpRequest) -> HttpResponse:
             '''
             return HttpResponse(success_html)
         
-        # Create new connection
-        Connection.objects.create(
-            user1=current_user,
-            user2=qr_code_owner,
-            event=event,
-            connection_method=method,
-            status='confirmed'
-        )
-        
-        # Award gamification points if available
+        # Create bidirectional connection using helper method
         try:
-            from gamification.services import GamificationService
-            gamification_service = GamificationService()
-            gamification_service.award_points(current_user, 'networking_connection', event=event)
-            gamification_service.award_points(qr_code_owner, 'networking_connection', event=event)
-        except ImportError:
-            pass  # Gamification not available
+            connection, reverse_connection = create_bidirectional_connection(
+                from_user=current_user,
+                to_user=qr_code_owner,
+                event=event,
+                method=method
+            )
+        except Exception as e:
+            logger.error(f"Failed to create connection: {str(e)}")
+            return HttpResponse("An error occurred while creating the connection. Please try again.", status=500)
         
         # Create success page
         success_html = f'''
