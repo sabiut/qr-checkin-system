@@ -11,7 +11,7 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.core.paginator import Paginator
 from typing import Union
-from .models import NetworkingProfile, Connection, EventNetworkingSettings
+from .models import NetworkingProfile, Connection, EventNetworkingSettings, ConnectionStatus, ConnectionMethod
 from .services import NetworkingQRService
 from events.models import Event
 import json
@@ -34,7 +34,7 @@ def check_existing_connection(user1: User, user2: User, event: Event) -> Union[C
     ).first()
 
 
-def create_bidirectional_connection(from_user: User, to_user: User, event: Event, method: str = 'qr_scan') -> tuple[Connection, Connection]:
+def create_bidirectional_connection(from_user: User, to_user: User, event: Event, method: str = ConnectionMethod.QR_SCAN) -> tuple:
     """
     Create a bidirectional connection between two users for an event.
     Returns tuple of (primary_connection, reverse_connection).
@@ -58,7 +58,7 @@ def create_bidirectional_connection(from_user: User, to_user: User, event: Event
             to_user=to_user,
             event=event,
             connection_method=method,
-            status='accepted'
+            status=ConnectionStatus.ACCEPTED
         )
         logger.info(f"Primary connection created: {connection.id} ({from_user.username} → {to_user.username})")
         
@@ -89,23 +89,57 @@ def validate_event_access(user: User, event: Event) -> tuple[bool, str]:
     """
     Validate if user has access to event networking features.
     Returns (is_valid, error_message) tuple.
+    
+    Enhanced security checks:
+    - Validates user authentication
+    - Checks event invitation status
+    - Verifies RSVP status
+    - Checks if networking is enabled for the event
     """
+    # Basic authentication check
+    if not user.is_authenticated:
+        return False, "Authentication required"
+    
+    # Check if event exists and is active
+    if not event:
+        return False, "Event not found"
+    
     try:
         from invitations.models import Invitation
         # Find invitation by matching guest_email with user's email
-        invitation = Invitation.objects.get(guest_email=user.email, event=event)
+        # Use select_related to avoid additional queries
+        invitation = Invitation.objects.select_related('event').get(
+            guest_email=user.email, 
+            event=event
+        )
         
-        # Check RSVP status (PENDING, ATTENDING, DECLINED)
+        # Check RSVP status - only allow PENDING and ATTENDING
         if invitation.rsvp_status == 'DECLINED':
-            return False, "You have declined this event invitation"
+            return False, "Access denied: You have declined this event invitation"
         
-        # Allow PENDING and ATTENDING users to access networking features
+        # Validate that networking is enabled for this event
+        try:
+            networking_settings = event.networking_settings
+            if not networking_settings.enable_networking:
+                return False, "Networking is disabled for this event"
+        except EventNetworkingSettings.DoesNotExist:
+            # Default to allowing networking if no settings exist
+            pass
+        
         return True, ""
+        
     except Invitation.DoesNotExist:
-        return False, "You must be invited to this event to view networking features"
+        # Log security attempt for monitoring
+        logger.warning(f"Unauthorized access attempt: user {user.id} ({user.email}) tried to access event {event.id}")
+        return False, "Access denied: You must be invited to this event"
+    
+    except Exception as e:
+        # Log unexpected errors for debugging
+        logger.error(f"Error validating event access for user {user.id} and event {event.id}: {str(e)}")
+        return False, "Access validation failed"
 
 
-def build_connection_html(connections, event: Event) -> str:
+def build_connection_html(connections, event: Event, current_user: User) -> str:
     """
     Build HTML for displaying connections.
     Extracted for better code organization and reusability.
@@ -118,14 +152,19 @@ def build_connection_html(connections, event: Event) -> str:
             <p>Start networking by scanning QR codes or browsing the attendee directory!</p>
             <div class="empty-actions">
                 <a href="/networking/directory/{event.id}/" class="btn-primary">Browse Attendees</a>
-                <a href="/networking/qr-code/{connections[0].from_user.id if connections else 'user'}/{event.id}/" class="btn-secondary">Show My QR Code</a>
+                <a href="/networking/qr-code/{current_user.id}/{event.id}/" class="btn-secondary">Show My QR Code</a>
             </div>
         </div>
         '''
     
     connections_html = ""
     for conn in connections:
-        connected_user = conn.to_user
+        # Determine which user is the "other" user (not current_user)
+        if conn.from_user == current_user:
+            connected_user = conn.to_user
+        else:
+            connected_user = conn.from_user
+            
         profile = getattr(connected_user, 'networking_profile', None)
         
         # Get user info
@@ -396,7 +435,7 @@ def networking_directory_page(request: HttpRequest, event_id: int) -> HttpRespon
             color = colors[hash(name) % len(colors)]
             
             attendees_html += f'''
-            <div class="attendee-card" data-name="{name.lower()}" data-company="{(profile.company or '').lower()}" data-title="{(profile.job_title or '').lower()}" data-interests="{interests_str.lower()}">
+            <div class="attendee-card" data-name="{escape(name.lower())}" data-company="{escape((profile.company or '').lower())}" data-title="{escape((profile.job_title or '').lower())}" data-interests="{escape(interests_str.lower())}">
                 <div class="attendee-avatar" style="background: {color};">
                     <span class="avatar-initials">{initials}</span>
                     <div class="online-indicator"></div>
@@ -1009,32 +1048,29 @@ def networking_connections_page(request: HttpRequest, event_id: int) -> HttpResp
             page_number = 1
             
         # Get all connections for this user at this event with pagination
+        # Include both directions: where user is from_user OR to_user
+        from django.db.models import Q
         connections_queryset = Connection.objects.filter(
-            from_user=current_user,
+            Q(from_user=current_user) | Q(to_user=current_user),
             event=event,
-            status='accepted'
-        ).select_related('to_user', 'to_user__networking_profile').order_by('-connected_at')
+            status=ConnectionStatus.ACCEPTED
+        ).select_related('from_user', 'to_user', 'from_user__networking_profile', 'to_user__networking_profile').order_by('-connected_at')
+        
+        # Debug logging to help troubleshoot
+        logger.info(f"User {current_user.username} ({current_user.email}) viewing connections for event {event.id}")
+        logger.info(f"Total connections found: {connections_queryset.count()}")
         
         # Paginate connections (20 per page)
         paginator = Paginator(connections_queryset, 20)
         connections_page = paginator.get_page(page_number)
         connections = connections_page.object_list
         
+        logger.info(f"Connections on current page: {len(connections)}")
+        for conn in connections:
+            logger.info(f"Connection: {conn.from_user.username} -> {conn.to_user.username}, method: {conn.connection_method}, status: {conn.status}")
+        
         # Build connections HTML using helper function
-        connections_html = build_connection_html(connections, event)
-        if not connections:
-            # Fix the empty state QR code link
-            connections_html = f'''
-            <div class="empty-state">
-                <div class="empty-icon">🤝</div>
-                <h3>No connections yet</h3>
-                <p>Start networking by scanning QR codes or browsing the attendee directory!</p>
-                <div class="empty-actions">
-                    <a href="/networking/directory/{event.id}/" class="btn-primary">Browse Attendees</a>
-                    <a href="/networking/qr-code/{current_user.id}/{event.id}/" class="btn-secondary">Show My QR Code</a>
-                </div>
-            </div>
-            '''
+        connections_html = build_connection_html(connections, event, current_user)
         html = f'''
         <!DOCTYPE html>
         <html>
@@ -1216,6 +1252,11 @@ def networking_profile_page(request: HttpRequest, user_id: int, event_id: int) -
         # Authorization check - users can only edit their own profile
         if request.user.id != user_id:
             return HttpResponse("Unauthorized: You can only view your own profile", status=403)
+        
+        # Validate event access
+        is_valid, error_message = validate_event_access(request.user, event)
+        if not is_valid:
+            return HttpResponse(f"Access denied: {error_message}", status=403)
         
         # Get or create networking profile
         profile, created = NetworkingProfile.objects.get_or_create(
@@ -1575,20 +1616,45 @@ def update_networking_profile(request: HttpRequest, user_id: int, event_id: int)
         if request.user.id != user_id:
             return HttpResponse("Unauthorized: You can only update your own profile", status=403)
         
+        # Validate event access
+        is_valid, error_message = validate_event_access(request.user, event)
+        if not is_valid:
+            return HttpResponse(f"Access denied: {error_message}", status=403)
+        
         # Get or create networking profile
         profile, created = NetworkingProfile.objects.get_or_create(user=user)
         
-        # Validate and sanitize input data
-        company = request.POST.get('company', '').strip()[:100]  # Limit length
-        industry = request.POST.get('industry', '').strip()[:100]
-        interests = request.POST.get('interests', '').strip()[:500]
-        bio = request.POST.get('bio', '').strip()[:1000]
+        # Validate and sanitize input data with enhanced security checks
+        import re
         
-        # Basic validation
-        if len(company) > 100:
-            return HttpResponse("Company name too long", status=400)
-        if len(bio) > 1000:
-            return HttpResponse("Bio too long", status=400)
+        company = request.POST.get('company', '').strip()
+        industry = request.POST.get('industry', '').strip() 
+        interests = request.POST.get('interests', '').strip()
+        bio = request.POST.get('bio', '').strip()
+        
+        # Enhanced validation with security checks
+        if len(company) > 200:
+            return HttpResponse("Company name too long (max 200 characters)", status=400)
+        if len(industry) > 100:
+            return HttpResponse("Industry too long (max 100 characters)", status=400)
+        if len(interests) > 500:
+            return HttpResponse("Interests too long (max 500 characters)", status=400)
+        if len(bio) > 500:
+            return HttpResponse("Bio too long (max 500 characters)", status=400)
+        
+        # Check for suspicious patterns (basic XSS prevention)
+        suspicious_patterns = [r'<script', r'javascript:', r'onclick=', r'onload=']
+        for field, value in [('company', company), ('industry', industry), ('interests', interests), ('bio', bio)]:
+            for pattern in suspicious_patterns:
+                if re.search(pattern, value, re.IGNORECASE):
+                    logger.warning(f"Suspicious content detected in {field}: {value[:50]}...")
+                    return HttpResponse(f"Invalid content in {field}", status=400)
+        
+        # Truncate after validation to ensure data integrity
+        company = company[:200]
+        industry = industry[:100] 
+        interests = interests[:500]
+        bio = bio[:500]
         
         # Update profile fields
         profile.company = company
@@ -1813,7 +1879,7 @@ def networking_connect_action(request: HttpRequest) -> HttpResponse:
         from_user_id = request.GET.get('from_user')
         to_user = request.GET.get('to_user') 
         event_id = request.GET.get('event')
-        method = request.GET.get('method', 'qr_scan')
+        method = request.GET.get('method', ConnectionMethod.QR_SCAN)
         
         # Debug the parameters received
         logger.info(f"Connection parameters: from_user_id={from_user_id}, to_user={to_user}, event_id={event_id}, method={method}")

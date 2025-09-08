@@ -71,6 +71,21 @@ class NetworkingProfile(models.Model):
         return info
 
 
+class ConnectionStatus(models.TextChoices):
+    """Status choices for connections"""
+    PENDING = 'pending', 'Pending'
+    ACCEPTED = 'accepted', 'Accepted'
+    BLOCKED = 'blocked', 'Blocked'
+
+
+class ConnectionMethod(models.TextChoices):
+    """Method choices for how connections were made"""
+    QR_SCAN = 'qr_scan', 'QR Code Scan'
+    DIRECTORY = 'directory', 'Attendee Directory'
+    MANUAL = 'manual', 'Manual Add'
+    MUTUAL = 'mutual', 'Mutual Connection'
+
+
 class Connection(models.Model):
     """Represents a networking connection between two users at an event"""
     CONNECTION_METHODS = [
@@ -94,8 +109,8 @@ class Connection(models.Model):
     event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='networking_connections')
     
     # Connection details
-    connection_method = models.CharField(max_length=20, choices=CONNECTION_METHODS, default='qr_scan')
-    status = models.CharField(max_length=20, choices=CONNECTION_STATUS, default='accepted')
+    connection_method = models.CharField(max_length=20, choices=ConnectionMethod.choices, default=ConnectionMethod.QR_SCAN)
+    status = models.CharField(max_length=20, choices=ConnectionStatus.choices, default=ConnectionStatus.ACCEPTED)
     
     # Meeting context
     meeting_location = models.CharField(max_length=200, blank=True, help_text="Where they met at the event")
@@ -114,9 +129,10 @@ class Connection(models.Model):
         unique_together = ['from_user', 'to_user', 'event']
         ordering = ['-connected_at']
         indexes = [
-            models.Index(fields=['from_user', 'event']),
-            models.Index(fields=['to_user', 'event']),
+            models.Index(fields=['from_user', 'event', 'status']),
+            models.Index(fields=['to_user', 'event', 'status']),
             models.Index(fields=['event', 'connected_at']),
+            models.Index(fields=['status', 'connected_at']),
         ]
     
     def __str__(self):
