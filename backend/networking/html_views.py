@@ -910,12 +910,65 @@ def networking_directory_page(request: HttpRequest, event_id: int) -> HttpRespon
         return HttpResponse(f"Error loading directory: {str(e)}", status=500)
 
 
+@login_required
 def networking_connections_page(request: HttpRequest, event_id: int) -> HttpResponse:
-    """User-friendly connections management page - No auth required for viewing connections"""
+    """User-friendly connections management page showing real connections"""
     try:
         event = get_object_or_404(Event, id=event_id)
         
-        # For demo, show some sample connections
+        current_user = request.user
+        
+        # Get all connections for this user at this event
+        connections = Connection.objects.filter(
+            from_user=current_user,
+            event=event,
+            status='accepted'
+        ).select_related('to_user', 'to_user__networking_profile').order_by('-connected_at')
+        
+        # Build connections HTML
+        connections_html = ""
+        if connections:
+            for conn in connections:
+                connected_user = conn.to_user
+                profile = getattr(connected_user, 'networking_profile', None)
+                
+                # Get user info
+                full_name = connected_user.get_full_name() or connected_user.username
+                company = profile.company if profile else ""
+                bio = profile.bio if profile else ""
+                connection_method = dict(Connection.CONNECTION_METHODS).get(conn.connection_method, conn.connection_method)
+                
+                connections_html += f'''
+                <div class="connection-card">
+                    <div class="connection-avatar">
+                        {escape(full_name[0].upper() if full_name else "U")}
+                    </div>
+                    <div class="connection-content">
+                        <div class="connection-header">
+                            <div class="connection-name">{escape(full_name)}</div>
+                            <div class="connection-method">{escape(connection_method)}</div>
+                        </div>
+                        {f'<div class="connection-company">{escape(company)}</div>' if company else ''}
+                        {f'<div class="connection-bio">{escape(bio[:100] + ("..." if len(bio) > 100 else ""))}</div>' if bio else ''}
+                        <div class="connection-date">Connected {conn.connected_at.strftime("%B %d, %Y at %I:%M %p")}</div>
+                    </div>
+                    <div class="connection-actions">
+                        <a href="/networking/profile/{connected_user.id}/{event.id}/" class="btn-secondary">View Profile</a>
+                    </div>
+                </div>
+                '''
+        else:
+            connections_html = f'''
+            <div class="empty-state">
+                <div class="empty-icon">🤝</div>
+                <h3>No connections yet</h3>
+                <p>Start networking by scanning QR codes or browsing the attendee directory!</p>
+                <div class="empty-actions">
+                    <a href="/networking/directory/{event.id}/" class="btn-primary">Browse Attendees</a>
+                    <a href="/networking/qr-code/{current_user.id}/{event.id}/" class="btn-secondary">Show My QR Code</a>
+                </div>
+            </div>
+            '''
         html = f'''
         <!DOCTYPE html>
         <html>
@@ -1083,6 +1136,7 @@ def networking_connections_page(request: HttpRequest, event_id: int) -> HttpResp
         return HttpResponse(html)
         
     except Exception as e:
+        logger.error(f"Error loading connections for user {request.user.id if request.user.is_authenticated else 'anonymous'} at event {event_id}: {str(e)}")
         return HttpResponse(f"Error loading connections: {str(e)}", status=500)
 
 
