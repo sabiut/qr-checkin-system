@@ -9,6 +9,7 @@ from django.views.decorators.csrf import csrf_protect
 from django.middleware.csrf import get_token
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.core.paginator import Paginator
 from typing import Union
 from .models import NetworkingProfile, Connection, EventNetworkingSettings
 from .services import NetworkingQRService
@@ -82,6 +83,73 @@ def create_bidirectional_connection(from_user: User, to_user: User, event: Event
             # Don't raise - connection creation should still succeed
         
         return connection, reverse_connection
+
+
+def validate_event_access(user: User, event: Event) -> tuple[bool, str]:
+    """
+    Validate if user has access to event networking features.
+    Returns (is_valid, error_message) tuple.
+    """
+    try:
+        from invitations.models import Invitation
+        invitation = Invitation.objects.get(user=user, event=event)
+        if invitation.status not in ['accepted', 'attended']:
+            return False, "You don't have access to this event's networking features"
+        return True, ""
+    except Invitation.DoesNotExist:
+        return False, "You must be invited to this event to view networking features"
+
+
+def build_connection_html(connections, event: Event) -> str:
+    """
+    Build HTML for displaying connections.
+    Extracted for better code organization and reusability.
+    """
+    if not connections:
+        return f'''
+        <div class="empty-state">
+            <div class="empty-icon">🤝</div>
+            <h3>No connections yet</h3>
+            <p>Start networking by scanning QR codes or browsing the attendee directory!</p>
+            <div class="empty-actions">
+                <a href="/networking/directory/{event.id}/" class="btn-primary">Browse Attendees</a>
+                <a href="/networking/qr-code/{connections[0].from_user.id if connections else 'user'}/{event.id}/" class="btn-secondary">Show My QR Code</a>
+            </div>
+        </div>
+        '''
+    
+    connections_html = ""
+    for conn in connections:
+        connected_user = conn.to_user
+        profile = getattr(connected_user, 'networking_profile', None)
+        
+        # Get user info
+        full_name = connected_user.get_full_name() or connected_user.username
+        company = profile.company if profile else ""
+        bio = profile.bio if profile else ""
+        connection_method = dict(Connection.CONNECTION_METHODS).get(conn.connection_method, conn.connection_method)
+        
+        connections_html += f'''
+        <div class="connection-card">
+            <div class="connection-avatar">
+                {escape(full_name[0].upper() if full_name else "U")}
+            </div>
+            <div class="connection-content">
+                <div class="connection-header">
+                    <div class="connection-name">{escape(full_name)}</div>
+                    <div class="connection-method">{escape(connection_method)}</div>
+                </div>
+                {f'<div class="connection-company">{escape(company)}</div>' if company else ''}
+                {f'<div class="connection-bio">{escape(bio[:100] + ("..." if len(bio) > 100 else ""))}</div>' if bio else ''}
+                <div class="connection-date">Connected {conn.connected_at.strftime("%B %d, %Y at %I:%M %p")}</div>
+            </div>
+            <div class="connection-actions">
+                <a href="/networking/profile/{connected_user.id}/{event.id}/" class="btn-secondary">View Profile</a>
+            </div>
+        </div>
+        '''
+    
+    return connections_html
 
 
 def networking_qr_page(request: HttpRequest, user_id: int, event_id: int) -> HttpResponse:
@@ -914,50 +982,43 @@ def networking_directory_page(request: HttpRequest, event_id: int) -> HttpRespon
 def networking_connections_page(request: HttpRequest, event_id: int) -> HttpResponse:
     """User-friendly connections management page showing real connections"""
     try:
+        # Validate event_id parameter
+        try:
+            event_id = int(event_id)
+        except (ValueError, TypeError):
+            return HttpResponse("Invalid event ID", status=400)
+            
         event = get_object_or_404(Event, id=event_id)
-        
         current_user = request.user
         
-        # Get all connections for this user at this event
-        connections = Connection.objects.filter(
+        # Verify user has access to this event
+        is_valid, error_message = validate_event_access(current_user, event)
+        if not is_valid:
+            return HttpResponse(error_message, status=403)
+        
+        # Get pagination parameters
+        page_number = request.GET.get('page', 1)
+        try:
+            page_number = int(page_number)
+        except (ValueError, TypeError):
+            page_number = 1
+            
+        # Get all connections for this user at this event with pagination
+        connections_queryset = Connection.objects.filter(
             from_user=current_user,
             event=event,
             status='accepted'
         ).select_related('to_user', 'to_user__networking_profile').order_by('-connected_at')
         
-        # Build connections HTML
-        connections_html = ""
-        if connections:
-            for conn in connections:
-                connected_user = conn.to_user
-                profile = getattr(connected_user, 'networking_profile', None)
-                
-                # Get user info
-                full_name = connected_user.get_full_name() or connected_user.username
-                company = profile.company if profile else ""
-                bio = profile.bio if profile else ""
-                connection_method = dict(Connection.CONNECTION_METHODS).get(conn.connection_method, conn.connection_method)
-                
-                connections_html += f'''
-                <div class="connection-card">
-                    <div class="connection-avatar">
-                        {escape(full_name[0].upper() if full_name else "U")}
-                    </div>
-                    <div class="connection-content">
-                        <div class="connection-header">
-                            <div class="connection-name">{escape(full_name)}</div>
-                            <div class="connection-method">{escape(connection_method)}</div>
-                        </div>
-                        {f'<div class="connection-company">{escape(company)}</div>' if company else ''}
-                        {f'<div class="connection-bio">{escape(bio[:100] + ("..." if len(bio) > 100 else ""))}</div>' if bio else ''}
-                        <div class="connection-date">Connected {conn.connected_at.strftime("%B %d, %Y at %I:%M %p")}</div>
-                    </div>
-                    <div class="connection-actions">
-                        <a href="/networking/profile/{connected_user.id}/{event.id}/" class="btn-secondary">View Profile</a>
-                    </div>
-                </div>
-                '''
-        else:
+        # Paginate connections (20 per page)
+        paginator = Paginator(connections_queryset, 20)
+        connections_page = paginator.get_page(page_number)
+        connections = connections_page.object_list
+        
+        # Build connections HTML using helper function
+        connections_html = build_connection_html(connections, event)
+        if not connections:
+            # Fix the empty state QR code link
             connections_html = f'''
             <div class="empty-state">
                 <div class="empty-icon">🤝</div>
