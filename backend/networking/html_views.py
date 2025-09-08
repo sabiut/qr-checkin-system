@@ -105,7 +105,7 @@ def validate_event_access(user: User, event: Event) -> tuple[bool, str]:
         return False, "You must be invited to this event to view networking features"
 
 
-def build_connection_html(connections, event: Event) -> str:
+def build_connection_html(connections, event: Event, current_user: User) -> str:
     """
     Build HTML for displaying connections.
     Extracted for better code organization and reusability.
@@ -118,14 +118,19 @@ def build_connection_html(connections, event: Event) -> str:
             <p>Start networking by scanning QR codes or browsing the attendee directory!</p>
             <div class="empty-actions">
                 <a href="/networking/directory/{event.id}/" class="btn-primary">Browse Attendees</a>
-                <a href="/networking/qr-code/{connections[0].from_user.id if connections else 'user'}/{event.id}/" class="btn-secondary">Show My QR Code</a>
+                <a href="/networking/qr-code/{current_user.id}/{event.id}/" class="btn-secondary">Show My QR Code</a>
             </div>
         </div>
         '''
     
     connections_html = ""
     for conn in connections:
-        connected_user = conn.to_user
+        # Determine which user is the "other" user (not current_user)
+        if conn.from_user == current_user:
+            connected_user = conn.to_user
+        else:
+            connected_user = conn.from_user
+            
         profile = getattr(connected_user, 'networking_profile', None)
         
         # Get user info
@@ -1009,32 +1014,29 @@ def networking_connections_page(request: HttpRequest, event_id: int) -> HttpResp
             page_number = 1
             
         # Get all connections for this user at this event with pagination
+        # Include both directions: where user is from_user OR to_user
+        from django.db.models import Q
         connections_queryset = Connection.objects.filter(
-            from_user=current_user,
+            Q(from_user=current_user) | Q(to_user=current_user),
             event=event,
             status='accepted'
-        ).select_related('to_user', 'to_user__networking_profile').order_by('-connected_at')
+        ).select_related('from_user', 'to_user', 'from_user__networking_profile', 'to_user__networking_profile').order_by('-connected_at')
+        
+        # Debug logging to help troubleshoot
+        logger.info(f"User {current_user.username} ({current_user.email}) viewing connections for event {event.id}")
+        logger.info(f"Total connections found: {connections_queryset.count()}")
         
         # Paginate connections (20 per page)
         paginator = Paginator(connections_queryset, 20)
         connections_page = paginator.get_page(page_number)
         connections = connections_page.object_list
         
+        logger.info(f"Connections on current page: {len(connections)}")
+        for conn in connections:
+            logger.info(f"Connection: {conn.from_user.username} -> {conn.to_user.username}, method: {conn.connection_method}, status: {conn.status}")
+        
         # Build connections HTML using helper function
-        connections_html = build_connection_html(connections, event)
-        if not connections:
-            # Fix the empty state QR code link
-            connections_html = f'''
-            <div class="empty-state">
-                <div class="empty-icon">🤝</div>
-                <h3>No connections yet</h3>
-                <p>Start networking by scanning QR codes or browsing the attendee directory!</p>
-                <div class="empty-actions">
-                    <a href="/networking/directory/{event.id}/" class="btn-primary">Browse Attendees</a>
-                    <a href="/networking/qr-code/{current_user.id}/{event.id}/" class="btn-secondary">Show My QR Code</a>
-                </div>
-            </div>
-            '''
+        connections_html = build_connection_html(connections, event, current_user)
         html = f'''
         <!DOCTYPE html>
         <html>
