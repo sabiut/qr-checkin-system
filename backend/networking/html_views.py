@@ -1444,7 +1444,9 @@ def networking_connect_page(request: HttpRequest, qr_token: str) -> HttpResponse
         try:
             profile = NetworkingProfile.objects.get(networking_qr_token=qr_token)
             target_user = profile.user
+            logger.info(f"QR code scan: qr_token={qr_token}, target_user={target_user.id} ({target_user.username})")
         except NetworkingProfile.DoesNotExist:
+            logger.error(f"Invalid QR token: {qr_token}")
             return HttpResponse("Invalid QR code", status=404)
         
         # Create connection page HTML
@@ -1624,24 +1626,153 @@ def networking_connect_action(request: HttpRequest) -> HttpResponse:
         event_id = request.GET.get('event')
         method = request.GET.get('method', 'qr_scan')
         
+        # Debug the parameters received
+        logger.info(f"Connection parameters: from_user_id={from_user_id}, to_user={to_user}, event_id={event_id}, method={method}")
+        
         if not all([from_user_id, to_user, event_id]):
             return HttpResponse("Missing required parameters", status=400)
             
         # Get the event
         event = get_object_or_404(Event, id=event_id)
         
-        # Get the QR code owner (person being connected to)
-        qr_code_owner = get_object_or_404(User, id=from_user_id)
+        # Get current user (person doing the connecting) - check auth first
+        logger.info(f"Request user: {request.user}, is_authenticated: {request.user.is_authenticated}")
         
-        # Get current user (person doing the connecting)
         if not request.user.is_authenticated:
+            logger.warning("User not authenticated, redirecting to login")
             return redirect(f'/login/?next=/networking/connect-action/?from_user={from_user_id}&to_user={to_user}&event={event_id}&method={method}')
             
         current_user = request.user
+        logger.info(f"Authenticated user: {current_user.id} ({current_user.username})")
+        
+        # Get the QR code owner (person being connected to)
+        qr_code_owner = get_object_or_404(User, id=from_user_id)
+        logger.info(f"QR code owner found: {qr_code_owner.id} ({qr_code_owner.username})")
+        
+        # Debug logging
+        logger.info(f"Connection attempt: current_user={current_user.id} (type: {type(current_user.id)}, username: {current_user.username})")
+        logger.info(f"QR code owner: qr_code_owner={qr_code_owner.id} (type: {type(qr_code_owner.id)}, username: {qr_code_owner.username})")
+        logger.info(f"Comparison: {current_user.id} == {qr_code_owner.id} = {current_user.id == qr_code_owner.id}")
         
         # Prevent self-connection
-        if current_user.id == qr_code_owner.id:
-            return HttpResponse("You cannot connect to yourself", status=400)
+        if int(current_user.id) == int(qr_code_owner.id):
+            logger.warning(f"Self-connection attempt blocked: user {current_user.id} tried to connect to themselves")
+            error_html = f'''
+            <!DOCTYPE html>
+            <html lang="en">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Cannot Connect</title>
+                <style>
+                    * {{
+                        margin: 0;
+                        padding: 0;
+                        box-sizing: border-box;
+                    }}
+                    body {{
+                        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                        background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+                        min-height: 100vh;
+                        padding: 20px;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                    }}
+                    .container {{
+                        max-width: 500px;
+                        width: 100%;
+                        background: white;
+                        border-radius: 20px;
+                        box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+                        overflow: hidden;
+                        text-align: center;
+                    }}
+                    .header {{
+                        background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+                        padding: 40px 30px;
+                        color: white;
+                    }}
+                    .icon {{
+                        font-size: 48px;
+                        margin-bottom: 15px;
+                    }}
+                    .title {{
+                        font-size: 24px;
+                        font-weight: 700;
+                        margin-bottom: 10px;
+                    }}
+                    .content {{
+                        padding: 40px 30px;
+                    }}
+                    .message {{
+                        background: #fee2e2;
+                        padding: 20px;
+                        border-radius: 12px;
+                        margin-bottom: 30px;
+                        color: #991b1b;
+                        line-height: 1.5;
+                    }}
+                    .debug {{
+                        background: #f3f4f6;
+                        padding: 15px;
+                        border-radius: 8px;
+                        margin-bottom: 30px;
+                        font-family: monospace;
+                        font-size: 12px;
+                        text-align: left;
+                        color: #374151;
+                    }}
+                    .btn {{
+                        display: inline-flex;
+                        align-items: center;
+                        gap: 8px;
+                        padding: 12px 24px;
+                        border-radius: 8px;
+                        text-decoration: none;
+                        font-weight: 600;
+                        font-size: 14px;
+                        background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+                        color: white;
+                        transition: all 0.3s ease;
+                    }}
+                    .btn:hover {{
+                        transform: translateY(-2px);
+                        box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+                    }}
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="header">
+                        <div class="icon">&#10060;</div>
+                        <div class="title">Cannot Connect to Yourself</div>
+                    </div>
+                    
+                    <div class="content">
+                        <div class="message">
+                            <strong>Oops!</strong><br>
+                            This is your own QR code. You cannot connect to yourself.<br><br>
+                            To make connections, scan another attendee's QR code instead!
+                        </div>
+                        
+                        <div class="debug">
+                            <strong>Debug Info:</strong><br>
+                            Your User ID: {current_user.id}<br>
+                            Your Username: {escape(current_user.username)}<br>
+                            QR Code Owner ID: {qr_code_owner.id}<br>
+                            QR Code Owner: {escape(qr_code_owner.username)}<br>
+                        </div>
+                        
+                        <a href="/networking/directory/{event.id}/" class="btn">
+                            <span>👥</span> Browse Attendees
+                        </a>
+                    </div>
+                </div>
+            </body>
+            </html>
+            '''
+            return HttpResponse(error_html)
             
         # Check if connection already exists
         from networking.models import Connection
