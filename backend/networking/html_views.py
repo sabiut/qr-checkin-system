@@ -1777,9 +1777,9 @@ def networking_connect_action(request: HttpRequest) -> HttpResponse:
         # Check if connection already exists
         from networking.models import Connection
         existing_connection = Connection.objects.filter(
-            user1=current_user, user2=qr_code_owner, event=event
+            from_user=current_user, to_user=qr_code_owner, event=event
         ).first() or Connection.objects.filter(
-            user1=qr_code_owner, user2=current_user, event=event
+            from_user=qr_code_owner, to_user=current_user, event=event
         ).first()
         
         if existing_connection:
@@ -1901,13 +1901,24 @@ def networking_connect_action(request: HttpRequest) -> HttpResponse:
             return HttpResponse(success_html)
         
         # Create new connection
-        Connection.objects.create(
-            user1=current_user,
-            user2=qr_code_owner,
+        connection = Connection.objects.create(
+            from_user=current_user,
+            to_user=qr_code_owner,
             event=event,
             connection_method=method,
-            status='confirmed'
+            status='accepted'
         )
+        logger.info(f"Connection created successfully: {connection.id}")
+        
+        # Create reciprocal connection
+        try:
+            reverse_connection, created = connection.create_reverse_connection()
+            if created:
+                logger.info(f"Reciprocal connection created: {reverse_connection.id}")
+            else:
+                logger.info(f"Reciprocal connection already exists: {reverse_connection.id}")
+        except Exception as e:
+            logger.warning(f"Could not create reciprocal connection: {str(e)}")
         
         # Award gamification points if available
         try:
