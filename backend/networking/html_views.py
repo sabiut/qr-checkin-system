@@ -92,9 +92,14 @@ def validate_event_access(user: User, event: Event) -> tuple[bool, str]:
     """
     try:
         from invitations.models import Invitation
-        invitation = Invitation.objects.get(user=user, event=event)
-        if invitation.status not in ['accepted', 'attended']:
-            return False, "You don't have access to this event's networking features"
+        # Find invitation by matching guest_email with user's email
+        invitation = Invitation.objects.get(guest_email=user.email, event=event)
+        
+        # Check RSVP status (PENDING, ATTENDING, DECLINED)
+        if invitation.rsvp_status == 'DECLINED':
+            return False, "You have declined this event invitation"
+        
+        # Allow PENDING and ATTENDING users to access networking features
         return True, ""
     except Invitation.DoesNotExist:
         return False, "You must be invited to this event to view networking features"
