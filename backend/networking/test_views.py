@@ -26,13 +26,13 @@ def networking_test_page(request):
         </style>
     </head>
     <body>
-        <h1>🤝 Networking Feature Test Page</h1>
+        <h1>handshake Networking Feature Test Page</h1>
     '''
     
     # Show all users with networking profiles
     html += '''
         <div class="section">
-            <h2>👥 Available Users for Testing</h2>
+            <h2>people Available Users for Testing</h2>
             <div class="user-list">
     '''
     
@@ -99,7 +99,7 @@ def networking_test_page(request):
         </div>
         
         <div class="section">
-            <h2>📱 QR Code Testing</h2>
+            <h2>mobile QR Code Testing</h2>
             <p>You can test QR codes by:</p>
             <ul>
                 <li>Scanning with your phone camera</li>

@@ -16,7 +16,7 @@ jobs:
       - name: Checkout PR
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ github.token }}
           fetch-depth: 0
           
       - name: Setup Python for review script
@@ -50,13 +50,14 @@ jobs:
                   'Accept': 'application/vnd.github.v3.diff'
               }
               
-              url = f'https://api.github.com/repos/{os.environ["REPO_OWNER"]}/{os.environ["REPO_NAME"]}/pulls/{os.environ["PR_NUMBER"]}'
+              url = f'https://api.github.com/repos/{os.environ["REPO_OWNER"]}/{os.environ["REPO_NAME"]}/pulls/{os.environ["PR_NUMBER"]}/diff'
               response = requests.get(url, headers=headers)
               
               if response.status_code == 200:
                   return response.text
               else:
                   print(f"Failed to get PR diff: {response.status_code}")
+                  print(f"Response: {response.text}")
                   return None
           
           def review_with_claude(diff_content):
@@ -102,7 +103,7 @@ jobs:
               
               url = f'https://api.github.com/repos/{os.environ["REPO_OWNER"]}/{os.environ["REPO_NAME"]}/issues/{os.environ["PR_NUMBER"]}/comments'
               
-              comment_body = f"""## 🤖 Claude Code Review
+              comment_body = f"""## [BOT] Claude Code Review
           
           {review_content}
           
@@ -114,33 +115,33 @@ jobs:
               response = requests.post(url, headers=headers, json=data)
               
               if response.status_code == 201:
-                  print("✅ Review comment posted successfully!")
+                  print("SUCCESS: Review comment posted successfully!")
               else:
-                  print(f"❌ Failed to post comment: {response.status_code}")
+                  print(f"ERROR: Failed to post comment: {response.status_code}")
                   print(response.text)
           
           # Main execution
           if __name__ == "__main__":
-              print("🔍 Starting Claude Code Review...")
+              print("Starting Claude Code Review...")
               
               # Get the PR diff
               diff = get_pr_diff()
               if not diff:
-                  print("❌ Could not get PR diff")
+                  print("ERROR: Could not get PR diff")
                   exit(1)
               
-              print(f"📄 Got diff with {len(diff)} characters")
+              print(f"Got diff with {len(diff)} characters")
               
               # Review with Claude
               review = review_with_claude(diff)
               if not review:
-                  print("❌ Could not get review from Claude")
+                  print("ERROR: Could not get review from Claude")
                   exit(1)
               
-              print("✅ Got review from Claude")
+              print("SUCCESS: Got review from Claude")
               
               # Post the review
               post_review_comment(review)
               
-              print("🎉 Claude Code Review completed!")
+              print("Claude Code Review completed!")
           EOF

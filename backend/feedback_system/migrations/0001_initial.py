@@ -45,7 +45,7 @@ class Migration(migrations.Migration):
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('name', models.CharField(max_length=100)),
                 ('category', models.CharField(choices=[('content', 'Content'), ('venue', 'Venue'), ('organization', 'Organization'), ('technical', 'Technical'), ('catering', 'Catering'), ('networking', 'Networking'), ('speaker', 'Speaker'), ('general', 'General')], max_length=50)),
-                ('icon', models.CharField(default='🏷️', max_length=10)),
+                ('icon', models.CharField(default='tag', max_length=10)),
                 ('description', models.TextField(blank=True)),
                 ('is_positive', models.BooleanField(default=True)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),

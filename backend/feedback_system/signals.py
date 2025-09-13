@@ -77,9 +77,9 @@ def handle_feedback_gamification(sender, instance, created, **kwargs):
             Achievement.objects.create(
                 user=user,
                 event=instance.event,
-                title='Feedback Submitted! 📝',
+                title='Feedback Submitted! note',
                 description=f'Provided valuable feedback for {instance.event.name}',
-                icon='📝',
+                icon='note',
                 data={'points_earned': points_earned, 'feedback_id': str(instance.id)}
             )
             
@@ -88,9 +88,9 @@ def handle_feedback_gamification(sender, instance, created, **kwargs):
                 Achievement.objects.create(
                     user=user,
                     event=instance.event,
-                    title='Detailed Reviewer! 🔍',
+                    title='Detailed Reviewer! search',
                     description='Provided comprehensive feedback with detailed comments',
-                    icon='🔍',
+                    icon='search',
                     data={'detailed_feedback': True}
                 )
             
@@ -99,9 +99,9 @@ def handle_feedback_gamification(sender, instance, created, **kwargs):
                 Achievement.objects.create(
                     user=user,
                     event=instance.event,
-                    title='Event Promoter! 🌟',
+                    title='Event Promoter! star',
                     description='Rated as a promoter - would recommend this event to others',
-                    icon='🌟',
+                    icon='star',
                     data={'nps_score': instance.nps_score}
                 )
             

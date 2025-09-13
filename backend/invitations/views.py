@@ -409,7 +409,7 @@ class InvitationViewSet(viewsets.ModelViewSet):
             # User doesn't have an account - encourage registration
             html_parts.extend([
                 '<div class="gamification-header-wrapper">',
-                '<div class="gamification-header">🎮 Unlock Event Rewards</div>',
+                '<div class="gamification-header">game Unlock Event Rewards</div>',
                 '<div class="gamification-subtitle">Join our exclusive rewards program</div>',
                 '</div>',
                 '<div class="gamification-content">',
@@ -422,19 +422,19 @@ class InvitationViewSet(viewsets.ModelViewSet):
                 '</div>',
                 '<div class="feature-list">',
                 '<div class="feature-item">',
-                '<span class="feature-icon">🏆</span>',
+                '<span class="feature-icon">trophy</span>',
                 '<span>Earn exclusive badges for achievements</span>',
                 '</div>',
                 '<div class="feature-item">',
-                '<span class="feature-icon">📊</span>',
+                '<span class="feature-icon">chart</span>',
                 '<span>Track your progress on live leaderboards</span>',
                 '</div>',
                 '<div class="feature-item">',
-                '<span class="feature-icon">🔥</span>',
+                '<span class="feature-icon">fire</span>',
                 '<span>Build attendance streaks for bonus rewards</span>',
                 '</div>',
                 '<div class="feature-item">',
-                '<span class="feature-icon">🎯</span>',
+                '<span class="feature-icon">target</span>',
                 '<span>Complete challenges and unlock special perks</span>',
                 '</div>',
                 '</div>',
@@ -444,7 +444,7 @@ class InvitationViewSet(viewsets.ModelViewSet):
             # User has account but not logged in
             html_parts.extend([
                 '<div class="gamification-header-wrapper">',
-                '<div class="gamification-header">🔐 Welcome Back!</div>',
+                '<div class="gamification-header">lock Welcome Back!</div>',
                 '<div class="gamification-subtitle">Login to view your rewards</div>',
                 '</div>',
                 '<div class="gamification-content">',
@@ -464,7 +464,7 @@ class InvitationViewSet(viewsets.ModelViewSet):
             
             html_parts.extend([
                 '<div class="gamification-header-wrapper">',
-                '<div class="gamification-header">🎮 Your Event Dashboard</div>',
+                '<div class="gamification-header">game Your Event Dashboard</div>',
                 '<div class="gamification-subtitle">Track your achievements and progress</div>',
                 '</div>',
                 '<div class="gamification-content">',
@@ -474,7 +474,7 @@ class InvitationViewSet(viewsets.ModelViewSet):
                 f'<div class="stat-label">Total Points</div>',
                 f'</div>',
                 f'<div class="stat-card">',
-                f'<div class="stat-number">{profile.current_streak}<span style="margin-left: 5px;">🔥</span></div>',
+                f'<div class="stat-number">{profile.current_streak}<span style="margin-left: 5px;">fire</span></div>',
                 f'<div class="stat-label">Day Streak</div>',
                 f'</div>',
                 f'<div class="stat-card">',
@@ -749,7 +749,7 @@ class InvitationViewSet(viewsets.ModelViewSet):
             # User doesn't have an account - encourage registration for networking
             html_parts.extend([
                 '<div class="networking-header-wrapper">',
-                '<div class="networking-header">🤝 Connect & Network</div>',
+                '<div class="networking-header">handshake Connect & Network</div>',
                 '<div class="networking-subtitle">Join to unlock professional networking</div>',
                 '</div>',
                 '<div class="networking-content">',
@@ -759,7 +759,7 @@ class InvitationViewSet(viewsets.ModelViewSet):
                 '<p style="color: #64748b; margin: 15px 0;">Create your account to connect with other attendees, exchange contacts via QR codes, and build your professional network.</p>',
                 '<div style="margin-top: 25px;">',
                 f'<a href="/api/auth/register-page/?email={invitation.guest_email}&next=/tickets/{invitation.id}/" class="networking-btn">',
-                '<span>🚀</span> Join & Start Networking',
+                '<span>rocket</span> Join & Start Networking',
                 '</a>',
                 '</div>',
                 '</div>',
@@ -769,12 +769,12 @@ class InvitationViewSet(viewsets.ModelViewSet):
             # User has account but not logged in
             html_parts.extend([
                 '<div class="networking-header-wrapper">',
-                '<div class="networking-header">🤝 Welcome Back!</div>',
+                '<div class="networking-header">handshake Welcome Back!</div>',
                 '<div class="networking-subtitle">Login to access networking features</div>',
                 '</div>',
                 '<div class="networking-content">',
                 '<div class="feature-card" style="margin: 0; max-width: none;">',
-                '<div class="feature-icon">🔐</div>',
+                '<div class="feature-icon">lock</div>',
                 '<div class="feature-title">Your Networking Profile Awaits</div>',
                 '<p style="color: #64748b; margin: 15px 0;">Access your networking QR code, browse attendee directory, and manage your professional connections.</p>',
                 '<div style="margin-top: 25px;">',
@@ -810,7 +810,7 @@ class InvitationViewSet(viewsets.ModelViewSet):
                 
                 html_parts.extend([
                     '<div class="networking-header-wrapper">',
-                    '<div class="networking-header">🤝 Networking Hub</div>',
+                    '<div class="networking-header">handshake Networking Hub</div>',
                     '<div class="networking-subtitle">Connect with fellow attendees</div>',
                     '</div>',
                     '<div class="networking-content">'
@@ -839,12 +839,12 @@ class InvitationViewSet(viewsets.ModelViewSet):
                 html_parts.extend([
                     '<div class="networking-features">',
                     '<div class="feature-card">',
-                    '<div class="feature-icon">📱</div>',
+                    '<div class="feature-icon">mobile</div>',
                     '<div class="feature-title">My QR Code</div>',
                     '<div class="feature-desc">Get your networking QR code for instant connections</div>',
                     '</div>',
                     '<div class="feature-card">',
-                    '<div class="feature-icon">👥</div>',
+                    '<div class="feature-icon">people</div>',
                     '<div class="feature-title">Attendee Directory</div>',
                     '<div class="feature-desc">Browse and connect with other attendees</div>',
                     '</div>',
@@ -854,7 +854,7 @@ class InvitationViewSet(viewsets.ModelViewSet):
                     '<div class="feature-desc">View and manage your professional network</div>',
                     '</div>',
                     '<div class="feature-card">',
-                    '<div class="feature-icon">⚙️</div>',
+                    '<div class="feature-icon">settings</div>',
                     '<div class="feature-title">Profile Settings</div>',
                     '<div class="feature-desc">Update your networking preferences</div>',
                     '</div>',
@@ -865,10 +865,10 @@ class InvitationViewSet(viewsets.ModelViewSet):
                 html_parts.extend([
                     '<div class="networking-actions">',
                     f'<a href="/networking/qr-code/{user.id}/{invitation.event.id}/" class="networking-btn">',
-                    '<span>📱</span> Get My QR Code',
+                    '<span>mobile</span> Get My QR Code',
                     '</a>',
                     f'<a href="/networking/directory/{invitation.event.id}/" class="networking-btn">',
-                    '<span>👥</span> Browse Attendees',
+                    '<span>people</span> Browse Attendees',
                     '</a>',
                     f'<a href="/networking/connections/{invitation.event.id}/" class="networking-btn">',
                     '<span>🔗</span> My Connections',
@@ -886,7 +886,7 @@ class InvitationViewSet(viewsets.ModelViewSet):
                 # Fallback to basic message
                 html_parts.extend([
                     '<div class="networking-header-wrapper">',
-                    '<div class="networking-header">🤝 Networking Available</div>',
+                    '<div class="networking-header">handshake Networking Available</div>',
                     '</div>',
                     '<div class="networking-content">',
                     '<p style="text-align: center; color: #64748b;">Networking features are enabled for this event. Connect with other attendees!</p>',
@@ -1140,17 +1140,17 @@ class InvitationViewSet(viewsets.ModelViewSet):
             # Already submitted feedback
             html_parts.extend([
                 '<div class="feedback-header-wrapper">',
-                '<div class="feedback-header">✅ Feedback Complete</div>',
+                '<div class="feedback-header">SUCCESS Feedback Complete</div>',
                 '<div class="feedback-subtitle">Thank you for your valuable input</div>',
                 '</div>',
                 '<div class="feedback-content">',
                 '<div class="feedback-completed-card">',
-                '<div class="feedback-completed-icon">🎉</div>',
+                '<div class="feedback-completed-icon">celebration</div>',
                 '<div class="feedback-completed-title">Your Feedback Has Been Received!</div>',
                 '<div class="feedback-completed-message">',
                 '<p>Thank you for taking the time to share your experience.</p>',
                 '<p>Your feedback helps us create better events in the future.</p>',
-                '<p style="margin-top: 15px; color: #10b981; font-weight: 600;">🎮 You earned gamification points for your feedback!</p>',
+                '<p style="margin-top: 15px; color: #10b981; font-weight: 600;">game You earned gamification points for your feedback!</p>',
                 '</div>',
                 '</div>',
                 '</div>'
@@ -1159,7 +1159,7 @@ class InvitationViewSet(viewsets.ModelViewSet):
             # Event hasn't ended yet
             html_parts.extend([
                 '<div class="feedback-header-wrapper">',
-                '<div class="feedback-header">📝 Feedback Coming Soon</div>',
+                '<div class="feedback-header">note Feedback Coming Soon</div>',
                 '<div class="feedback-subtitle">Share your experience after the event</div>',
                 '</div>',
                 '<div class="feedback-content">',
@@ -1169,7 +1169,7 @@ class InvitationViewSet(viewsets.ModelViewSet):
                 '<div class="feedback-pending-message">',
                 '<p>We hope you\'re enjoying the event!</p>',
                 '<p>You\'ll be able to share your feedback once the event concludes.</p>',
-                '<p style="margin-top: 15px;">💡 <strong>Pro tip:</strong> Complete your feedback to earn bonus gamification points!</p>',
+                '<p style="margin-top: 15px;">idea <strong>Pro tip:</strong> Complete your feedback to earn bonus gamification points!</p>',
                 '</div>',
                 '</div>',
                 '</div>'
@@ -1179,7 +1179,7 @@ class InvitationViewSet(viewsets.ModelViewSet):
             feedback_url = f"/api/feedback/feedback/?event_id={invitation.event.id}&invitation_id={invitation.id}&email={invitation.guest_email}"
             html_parts.extend([
                 '<div class="feedback-header-wrapper">',
-                '<div class="feedback-header">📝 Share Your Experience</div>',
+                '<div class="feedback-header">note Share Your Experience</div>',
                 '<div class="feedback-subtitle">Help us improve future events</div>',
                 '</div>',
                 '<div class="feedback-content">',
@@ -1194,12 +1194,12 @@ class InvitationViewSet(viewsets.ModelViewSet):
                 '<span class="points-value">15 pts</span>',
                 '</div>',
                 '<div class="points-item">',
-                '<span class="points-icon">✍️</span>',
+                '<span class="points-icon">writing</span>',
                 '<span class="points-text">Detailed comments</span>',
                 '<span class="points-value">+5 pts</span>',
                 '</div>',
                 '<div class="points-item">',
-                '<span class="points-icon">🚀</span>',
+                '<span class="points-icon">rocket</span>',
                 '<span class="points-text">NPS promoter</span>',
                 '<span class="points-value">+5 pts</span>',
                 '</div>',
@@ -1231,7 +1231,7 @@ class InvitationViewSet(viewsets.ModelViewSet):
                     
                     modal.innerHTML = `
                         <div style="background: white; padding: 30px; border-radius: 10px; max-width: 500px; width: 100%; max-height: 90vh; overflow-y: auto;">
-                            <h2 style="color: #333; margin-bottom: 20px;">📝 Event Feedback</h2>
+                            <h2 style="color: #333; margin-bottom: 20px;">note Event Feedback</h2>
                             <form id="feedbackForm">
                                 <div style="margin-bottom: 15px;">
                                     <label style="display: block; margin-bottom: 5px; font-weight: bold; color: #333;">Overall Rating:</label>
@@ -1338,14 +1338,14 @@ class InvitationViewSet(viewsets.ModelViewSet):
             
             # Save the invitation to database first
             invitation = serializer.save()
-            logger.info(f"✅ Successfully created invitation {invitation.id} in database")
+            logger.info(f"SUCCESS Successfully created invitation {invitation.id} in database")
             
             # Verify the invitation exists in database
             if not Invitation.objects.filter(id=invitation.id).exists():
-                logger.error(f"❌ CRITICAL: Invitation {invitation.id} was not saved to database!")
+                logger.error(f"ERROR CRITICAL: Invitation {invitation.id} was not saved to database!")
                 raise ValueError(f"Invitation {invitation.id} was not saved to database")
             
-            logger.info(f"✅ Verified invitation {invitation.id} exists in database")
+            logger.info(f"SUCCESS Verified invitation {invitation.id} exists in database")
             
             # Check if tickets were generated during save
             if not invitation.ticket_html or not invitation.ticket_pdf:
@@ -1353,14 +1353,14 @@ class InvitationViewSet(viewsets.ModelViewSet):
                 try:
                     invitation.generate_tickets()
                     invitation.save()
-                    logger.info(f"✅ Tickets generated for invitation {invitation.id}")
+                    logger.info(f"SUCCESS Tickets generated for invitation {invitation.id}")
                 except Exception as e:
-                    logger.error(f"❌ Failed to generate tickets for invitation {invitation.id}: {str(e)}")
+                    logger.error(f"ERROR Failed to generate tickets for invitation {invitation.id}: {str(e)}")
                     import traceback
                     logger.error(traceback.format_exc())
                     # Don't fail the entire creation just because tickets failed
             else:
-                logger.info(f"✅ Tickets already exist for invitation {invitation.id}")
+                logger.info(f"SUCCESS Tickets already exist for invitation {invitation.id}")
             
             # Send email if guest has email address
             if invitation.guest_email:
@@ -1371,22 +1371,22 @@ class InvitationViewSet(viewsets.ModelViewSet):
                     self.get_object = lambda: invitation  # Temporarily set get_object to return our invitation
                     response = self.send_email(request=None, pk=invitation.id)
                     if response.status_code >= 400:
-                        logger.error(f"❌ Failed to send email: {response.data}")
+                        logger.error(f"ERROR Failed to send email: {response.data}")
                     else:
-                        logger.info(f"✅ Email sent successfully to {invitation.guest_email}")
+                        logger.info(f"SUCCESS Email sent successfully to {invitation.guest_email}")
                 except Exception as e:
-                    logger.error(f"❌ Failed to send invitation email: {str(e)}")
+                    logger.error(f"ERROR Failed to send invitation email: {str(e)}")
                     import traceback
                     logger.error(traceback.format_exc())
                     # Don't fail the entire creation just because email failed
             else:
                 logger.info(f"No email address provided for invitation {invitation.id}, skipping email")
                 
-            logger.info(f"✅ Invitation creation process completed successfully for {invitation.id}")
+            logger.info(f"SUCCESS Invitation creation process completed successfully for {invitation.id}")
             return invitation
             
         except Exception as e:
-            logger.error(f"❌ CRITICAL ERROR in invitation creation: {str(e)}")
+            logger.error(f"ERROR CRITICAL ERROR in invitation creation: {str(e)}")
             import traceback
             logger.error(traceback.format_exc())
             

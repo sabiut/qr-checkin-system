@@ -19,7 +19,7 @@ class FeedbackTag(models.Model):
     
     name = models.CharField(max_length=100)
     category = models.CharField(max_length=50, choices=CATEGORY_CHOICES)
-    icon = models.CharField(max_length=10, default='🏷️')
+    icon = models.CharField(max_length=10, default='tag')
     description = models.TextField(blank=True)
     is_positive = models.BooleanField(default=True)  # True for positive, False for negative
     created_at = models.DateTimeField(auto_now_add=True)

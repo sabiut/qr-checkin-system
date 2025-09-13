@@ -167,7 +167,7 @@ class BadgeService:
                         badge_type='feedback',
                         defaults={
                             'description': description,
-                            'icon': '📝',
+                            'icon': 'note',
                             'criteria': {'feedback_count': count},
                             'is_active': True
                         }
@@ -219,7 +219,7 @@ class BadgeService:
                     badge_type='feedback',
                     defaults={
                         'description': 'Provides comprehensive feedback with detailed comments',
-                        'icon': '📋',
+                        'icon': 'clipboard',
                         'criteria': {'detailed_feedback': True},
                         'is_active': True
                     }

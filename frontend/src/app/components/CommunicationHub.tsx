@@ -553,11 +553,11 @@ export const CommunicationHub: React.FC<CommunicationHubProps> = ({ eventId }) =
   // Get priority icon
   const getPriorityIcon = (priority: string) => {
     switch (priority) {
-      case 'critical': return '🚨';
-      case 'high': return '⚠️';
-      case 'normal': return 'ℹ️';
-      case 'low': return '📌';
-      default: return '📌';
+      case 'critical': return 'CRITICAL';
+      case 'high': return 'HIGH';
+      case 'normal': return 'INFO';
+      case 'low': return 'LOW';
+      default: return 'DEFAULT';
     }
   };
 

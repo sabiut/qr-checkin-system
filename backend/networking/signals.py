@@ -125,7 +125,7 @@ def create_networking_achievements(user, event, profile, connection):
         achievements_to_create.append({
             'title': 'First Connection!',
             'description': 'Made your first networking connection',
-            'icon': '🤝',
+            'icon': 'handshake',
             'data': {'connection_id': str(connection.id), 'method': connection.connection_method}
         })
     
@@ -150,7 +150,7 @@ def create_networking_achievements(user, event, profile, connection):
             achievements_to_create.append({
                 'title': f'QR Scanner Pro!',
                 'description': f'Connected with {qr_connections} people via QR code',
-                'icon': '📱',
+                'icon': 'mobile',
                 'data': {'qr_connections': qr_connections}
             })
     
