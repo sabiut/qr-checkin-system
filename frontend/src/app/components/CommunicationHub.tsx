@@ -19,8 +19,10 @@ import {
   MessageSquare,
   Plus,
   X,
-  MoreVertical
+  MoreVertical,
+  Heart
 } from 'lucide-react';
+import { IcebreakerActivities } from './IcebreakerActivities';
 
 interface Message {
   id: string;
@@ -130,7 +132,7 @@ export const CommunicationHub: React.FC<CommunicationHubProps> = ({ eventId }) =
     );
   }
 
-  const [activeTab, setActiveTab] = useState<'messages' | 'announcements' | 'forum' | 'qa'>('messages');
+  const [activeTab, setActiveTab] = useState<'messages' | 'announcements' | 'forum' | 'qa' | 'icebreakers'>('messages');
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -178,6 +180,7 @@ export const CommunicationHub: React.FC<CommunicationHubProps> = ({ eventId }) =
     { id: 'announcements', label: 'Announcements', icon: Megaphone },
     { id: 'forum', label: 'Forum', icon: Users },
     { id: 'qa', label: 'Q&A', icon: HelpCircle },
+    { id: 'icebreakers', label: 'Icebreakers', icon: Heart },
   ];
 
   // Scroll to bottom of messages
@@ -1432,6 +1435,15 @@ export const CommunicationHub: React.FC<CommunicationHubProps> = ({ eventId }) =
               </div>
             </div>
           </div>
+        )}
+
+        {activeTab === 'icebreakers' && (
+          <IcebreakerActivities
+            eventId={eventId}
+            token={token}
+            showError={showError}
+            showSuccess={showSuccess}
+          />
         )}
       </div>
 

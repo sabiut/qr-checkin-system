@@ -2,7 +2,7 @@ from django.contrib import admin
 from .models import (
     Message, Announcement, AnnouncementRead, ForumThread, ForumPost,
     QAQuestion, QAAnswer, IcebreakerActivity, IcebreakerResponse,
-    NotificationPreference
+    IcebreakerResponseLike, IcebreakerResponseReply, NotificationPreference
 )
 
 @admin.register(Message)
@@ -51,9 +51,38 @@ class QAQuestionAdmin(admin.ModelAdmin):
         return 'Anonymous' if obj.is_anonymous else obj.author.username
     author_display.short_description = 'Author'
 
+@admin.register(IcebreakerActivity)
+class IcebreakerActivityAdmin(admin.ModelAdmin):
+    list_display = ['title', 'event', 'activity_type', 'is_active', 'is_featured', 'response_count', 'starts_at']
+    list_filter = ['activity_type', 'is_active', 'is_featured', 'starts_at']
+    search_fields = ['title', 'description', 'event__name']
+    readonly_fields = ['response_count', 'view_count']
+
+    actions = ['activate_activities', 'feature_activities']
+
+    def activate_activities(self, request, queryset):
+        queryset.update(is_active=True)
+    activate_activities.short_description = 'Activate selected activities'
+
+    def feature_activities(self, request, queryset):
+        queryset.update(is_featured=True)
+    feature_activities.short_description = 'Feature selected activities'
+
+@admin.register(IcebreakerResponse)
+class IcebreakerResponseAdmin(admin.ModelAdmin):
+    list_display = ['user', 'activity', 'response_preview', 'like_count', 'is_public', 'created_at']
+    list_filter = ['is_public', 'created_at', 'activity__activity_type']
+    search_fields = ['user__username', 'text_response', 'activity__title']
+    readonly_fields = ['like_count', 'reply_count']
+
+    def response_preview(self, obj):
+        content = obj.text_response or obj.selected_option
+        return content[:50] + '...' if len(content) > 50 else content
+    response_preview.short_description = 'Response'
+
 admin.site.register(AnnouncementRead)
 admin.site.register(ForumPost)
 admin.site.register(QAAnswer)
-admin.site.register(IcebreakerActivity)
-admin.site.register(IcebreakerResponse)
+admin.site.register(IcebreakerResponseLike)
+admin.site.register(IcebreakerResponseReply)
 admin.site.register(NotificationPreference)

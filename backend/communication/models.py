@@ -249,66 +249,6 @@ class QAAnswer(models.Model):
             self.question.save()
 
 
-class IcebreakerActivity(models.Model):
-    """Pre-event icebreaker activities"""
-    ACTIVITY_TYPES = [
-        ('poll', 'Poll'),
-        ('quiz', 'Quiz'),
-        ('question', 'Question'),
-        ('challenge', 'Challenge'),
-        ('introduction', 'Introduction'),
-    ]
-    
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='icebreaker_activities')
-    creator = models.ForeignKey(User, on_delete=models.CASCADE, related_name='created_icebreakers')
-    
-    title = models.CharField(max_length=200)
-    description = models.TextField()
-    activity_type = models.CharField(max_length=20, choices=ACTIVITY_TYPES, default='question')
-    
-    # Activity data (JSON for flexibility)
-    activity_data = models.JSONField(default=dict, help_text="Poll options, quiz questions, etc.")
-    
-    # Scheduling
-    is_active = models.BooleanField(default=True)
-    starts_at = models.DateTimeField(null=True, blank=True)
-    ends_at = models.DateTimeField(null=True, blank=True)
-    
-    # Gamification
-    points_reward = models.IntegerField(default=5)
-    
-    # Timestamps
-    created_at = models.DateTimeField(auto_now_add=True)
-    
-    class Meta:
-        ordering = ['-created_at']
-    
-    def __str__(self):
-        return f"{self.title} - {self.event.name}"
-
-
-class IcebreakerResponse(models.Model):
-    """User responses to icebreaker activities"""
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    activity = models.ForeignKey(IcebreakerActivity, on_delete=models.CASCADE, related_name='responses')
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='icebreaker_responses')
-    
-    response_data = models.JSONField(default=dict)
-    is_public = models.BooleanField(default=True)
-    
-    # Gamification
-    points_earned = models.IntegerField(default=0)
-    
-    # Timestamps
-    created_at = models.DateTimeField(auto_now_add=True)
-    
-    class Meta:
-        unique_together = ['activity', 'user']
-        ordering = ['-created_at']
-    
-    def __str__(self):
-        return f"{self.user.username}'s response to {self.activity.title}"
 
 
 class NotificationPreference(models.Model):
@@ -344,3 +284,166 @@ class NotificationPreference(models.Model):
     
     def __str__(self):
         return f"Notification preferences for {self.user.username}"
+
+
+class IcebreakerActivity(models.Model):
+    """Pre-event icebreaker activities to encourage engagement"""
+
+    # Extended activity types (keeping existing ones and adding new ones)
+    ACTIVITY_TYPES = [
+        ('poll', 'Poll'),
+        ('quiz', 'Quiz'),
+        ('question', 'Question'),
+        ('challenge', 'Challenge'),
+        ('introduction', 'Introduction'),
+        ('prediction', 'Event Prediction'),
+        ('skill_sharing', 'Skill Sharing'),
+        ('goal_setting', 'Goal Setting'),
+        ('fun_fact', 'Fun Fact Sharing'),
+        ('networking_challenge', 'Networking Challenge'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    event = models.ForeignKey('events.Event', on_delete=models.CASCADE, related_name='icebreaker_activities')
+    creator = models.ForeignKey(User, on_delete=models.CASCADE, related_name='created_icebreakers')
+
+    # Core fields (matching existing migration)
+    title = models.CharField(max_length=200)
+    description = models.TextField()
+    activity_type = models.CharField(
+        max_length=20,
+        choices=ACTIVITY_TYPES,
+        default='question'
+    )
+    activity_data = models.JSONField(
+        default=dict,
+        help_text='Poll options, quiz questions, etc.'
+    )
+    is_active = models.BooleanField(default=True)
+    starts_at = models.DateTimeField(null=True, blank=True)
+    ends_at = models.DateTimeField(null=True, blank=True)
+    points_reward = models.IntegerField(default=5)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    # Additional fields (these will need a migration)
+    is_featured = models.BooleanField(default=False, help_text="Show prominently in the app")
+    allow_multiple_responses = models.BooleanField(default=False)
+    anonymous_responses = models.BooleanField(default=False)
+    response_count = models.IntegerField(default=0)
+    view_count = models.IntegerField(default=0)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    # Guest response system
+    guest_response_token = models.CharField(max_length=64, unique=True, null=True, blank=True,
+                                          help_text="Unique token for guest access")
+    email_sent = models.BooleanField(default=False, help_text="Whether invitation emails were sent")
+    email_sent_at = models.DateTimeField(null=True, blank=True, help_text="When invitation emails were sent")
+    send_email_on_create = models.BooleanField(default=True, help_text="Send emails to invitees when activity is created")
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.title} - {self.event.name}"
+
+    def save(self, *args, **kwargs):
+        """Generate guest response token on creation"""
+        if not self.guest_response_token:
+            import secrets
+            self.guest_response_token = secrets.token_urlsafe(32)
+        super().save(*args, **kwargs)
+
+    def get_guest_response_url(self, request=None):
+        """Get the public URL for guest responses"""
+        if request:
+            base_url = f"{request.scheme}://{request.get_host()}"
+        else:
+            from django.conf import settings
+            base_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:5173')
+
+        return f"{base_url}/icebreaker/{self.guest_response_token}"
+
+    def is_currently_active(self):
+        """Check if activity is currently active"""
+        now = timezone.now()
+        return (self.is_active and
+                self.starts_at and self.ends_at and
+                self.starts_at <= now <= self.ends_at)
+
+    def days_until_start(self):
+        """Days until activity starts"""
+        if not self.starts_at or self.starts_at <= timezone.now():
+            return 0
+        return (self.starts_at - timezone.now()).days
+
+
+class IcebreakerResponse(models.Model):
+    """User responses to icebreaker activities"""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    activity = models.ForeignKey(IcebreakerActivity, on_delete=models.CASCADE, related_name='responses')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='icebreaker_responses', null=True, blank=True)
+
+    # Core fields (matching existing migration)
+    response_data = models.JSONField(default=dict)
+    is_public = models.BooleanField(default=True)
+    points_earned = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    # Additional fields (these will need a migration)
+    like_count = models.IntegerField(default=0)
+    reply_count = models.IntegerField(default=0)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    # Guest response fields
+    guest_email = models.EmailField(null=True, blank=True, help_text="Email for guest responses")
+    guest_name = models.CharField(max_length=100, null=True, blank=True, help_text="Name for guest responses")
+    is_guest_response = models.BooleanField(default=False, help_text="Whether this is a guest response")
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        if self.is_guest_response:
+            return f"{self.guest_name or self.guest_email} (guest) - {self.activity.title}"
+        return f"{self.user.username} - {self.activity.title}"
+
+    # Helper properties for easier access to response data
+    @property
+    def text_response(self):
+        return self.response_data.get('text', '')
+
+    @property
+    def selected_option(self):
+        return self.response_data.get('selected_option', '')
+
+
+class IcebreakerResponseLike(models.Model):
+    """Track likes on icebreaker responses"""
+
+    response = models.ForeignKey(IcebreakerResponse, on_delete=models.CASCADE, related_name='likes')
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ['response', 'user']
+
+    def __str__(self):
+        return f"{self.user.username} likes {self.response.activity.title}"
+
+
+class IcebreakerResponseReply(models.Model):
+    """Replies to icebreaker responses for discussion"""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    response = models.ForeignKey(IcebreakerResponse, on_delete=models.CASCADE, related_name='replies')
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    content = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at']
+        verbose_name_plural = "Icebreaker Response Replies"
+
+    def __str__(self):
+        return f"Reply by {self.user.username} on {self.response.activity.title}"
