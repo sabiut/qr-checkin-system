@@ -49,16 +49,38 @@ jobs:
                   'Authorization': f'token {os.environ["GITHUB_TOKEN"]}',
                   'Accept': 'application/vnd.github.v3.diff'
               }
-              
-              url = f'https://api.github.com/repos/{os.environ["REPO_OWNER"]}/{os.environ["REPO_NAME"]}/pulls/{os.environ["PR_NUMBER"]}/diff'
+
+              # Use the correct GitHub API endpoint for PR diff
+              url = f'https://api.github.com/repos/{os.environ["REPO_OWNER"]}/{os.environ["REPO_NAME"]}/pulls/{os.environ["PR_NUMBER"]}'
               response = requests.get(url, headers=headers)
-              
+
               if response.status_code == 200:
                   return response.text
               else:
                   print(f"Failed to get PR diff: {response.status_code}")
                   print(f"Response: {response.text}")
-                  return None
+
+                  # Fallback: try to get PR files instead
+                  print("Trying alternative approach with PR files...")
+                  files_url = f'https://api.github.com/repos/{os.environ["REPO_OWNER"]}/{os.environ["REPO_NAME"]}/pulls/{os.environ["PR_NUMBER"]}/files'
+                  files_headers = {
+                      'Authorization': f'token {os.environ["GITHUB_TOKEN"]}',
+                      'Accept': 'application/vnd.github.v3+json'
+                  }
+
+                  files_response = requests.get(files_url, headers=files_headers)
+                  if files_response.status_code == 200:
+                      files_data = files_response.json()
+                      diff_content = ""
+                      for file in files_data:
+                          if 'patch' in file:
+                              diff_content += f"--- a/{file['filename']}\n"
+                              diff_content += f"+++ b/{file['filename']}\n"
+                              diff_content += file['patch'] + "\n\n"
+                      return diff_content if diff_content else None
+                  else:
+                      print(f"Failed to get PR files: {files_response.status_code}")
+                      return None
           
           def review_with_claude(diff_content):
               """Send diff to Claude for review"""
