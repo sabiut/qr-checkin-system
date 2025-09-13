@@ -20,5 +20,10 @@ type Params = {
   "/events/:eventId/check-in": {
     "eventId": string;
   };
+  "/events/:eventId/communication": {
+    "eventId": string;
+  };
   "/dashboard": {};
+  "/profile": {};
+  "/settings": {};
 };

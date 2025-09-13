@@ -373,19 +373,19 @@ export default function Home() {
                 </div>
               </div>
               
-              <div className="mt-10 md:mt-0 flex items-center p-6 bg-white bg-opacity-10 rounded-2xl border border-white border-opacity-20 shadow-xl backdrop-blur-sm hover:bg-opacity-15 transition-all duration-300 transform hover:-translate-y-1">
-                <div className="mr-5">
-                  <div className="w-18 h-18 bg-gradient-to-br from-blue-400 to-indigo-600 rounded-full flex items-center justify-center p-1 shadow-lg">
-                    <div className="w-16 h-16 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <div className="mt-16 md:mt-8 flex items-center p-6 bg-white bg-opacity-10 rounded-2xl border border-white border-opacity-20 shadow-xl backdrop-blur-sm hover:bg-opacity-15 transition-all duration-300 transform hover:-translate-y-1">
+                <div className="mr-4">
+                  <div className="w-12 h-12 bg-gradient-to-br from-blue-400 to-indigo-600 rounded-full flex items-center justify-center p-1 shadow-lg">
+                    <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
                       </svg>
                     </div>
                   </div>
                 </div>
                 <div>
-                  <div className="font-semibold text-xl mb-2">Quick Tips</div>
-                  <ul className="text-sm text-blue-50 space-y-2">
+                  <div className="font-semibold text-xl mb-2 text-white">Quick Tips</div>
+                  <ul className="text-sm text-gray-800 space-y-2">
                     <li className="flex items-center">
                       <div className="w-5 h-5 rounded-full bg-gradient-to-r from-green-400 to-emerald-500 flex items-center justify-center mr-2 shadow-sm">
                         <svg className="h-3 w-3 text-white" viewBox="0 0 20 20" fill="currentColor">
