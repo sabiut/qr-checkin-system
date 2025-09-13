@@ -102,7 +102,7 @@ def create_achievements(user, event, profile, new_badges):
         achievements_to_create.append({
             'title': f'{profile.current_streak}-Day Streak!',
             'description': f'Attended {profile.current_streak} events in a row',
-            'icon': '🔥',
+            'icon': 'fire',
             'data': {'streak': profile.current_streak}
         })
     
@@ -111,7 +111,7 @@ def create_achievements(user, event, profile, new_badges):
         achievements_to_create.append({
             'title': f'{profile.total_events_attended} Events Attended!',
             'description': f'Reached {profile.total_events_attended} total events',
-            'icon': '🎯',
+            'icon': 'target',
             'data': {'total_events': profile.total_events_attended}
         })
     
@@ -241,14 +241,14 @@ def create_feedback_achievements(user, event, profile, new_badges, points_earned
         achievements_to_create.append({
             'title': 'First Feedback!',
             'description': 'Submitted your first event feedback',
-            'icon': '📝',
+            'icon': 'note',
             'data': {'points_earned': points_earned, 'feedback_count': 1}
         })
     elif feedback_count in [5, 10, 25]:
         achievements_to_create.append({
             'title': f'{feedback_count} Feedback Submissions!',
             'description': f'Provided feedback for {feedback_count} events',
-            'icon': '📋',
+            'icon': 'clipboard',
             'data': {'points_earned': points_earned, 'feedback_count': feedback_count}
         })
     

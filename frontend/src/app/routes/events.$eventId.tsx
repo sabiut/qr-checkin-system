@@ -549,6 +549,14 @@ export default function EventDetail() {
                     <span>Check-in Guests</span>
                   </Link>
 
+                  <Link
+                    to={`/events/${event.id}/communication`}
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg bg-purple-600 text-white hover:bg-purple-700 transition-colors"
+                  >
+                    <Mail size={18} />
+                    <span>Communication Hub</span>
+                  </Link>
+
                   <button
                     onClick={() => setShowAttendeesList(!showAttendeesList)}
                     className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"

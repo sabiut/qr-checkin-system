@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { User, Mail, Lock, AlertCircle, Loader2, UserPlus } from 'lucide-react';
 
 interface RegisterFormProps {
@@ -8,6 +8,7 @@ interface RegisterFormProps {
 
 export default function RegisterForm({ onRegisterSuccess }: RegisterFormProps) {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [formData, setFormData] = useState({
     username: '',
     email: '',
@@ -19,6 +20,14 @@ export default function RegisterForm({ onRegisterSuccess }: RegisterFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<{[key: string]: string}>({});
+
+  // Pre-fill email from URL parameters
+  useEffect(() => {
+    const emailParam = searchParams.get('email');
+    if (emailParam) {
+      setFormData(prev => ({ ...prev, email: emailParam }));
+    }
+  }, [searchParams]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -80,9 +89,16 @@ export default function RegisterForm({ onRegisterSuccess }: RegisterFormProps) {
       
       // Call the success handler
       onRegisterSuccess(data.user, data.token);
-      
-      // Redirect to home page
-      navigate('/');
+
+      // Check if there's an event parameter to redirect to communication page
+      const eventParam = searchParams.get('event');
+      if (eventParam) {
+        // Redirect to the event communication page
+        navigate(`/events/${eventParam}/communication`);
+      } else {
+        // Redirect to home page
+        navigate('/');
+      }
       
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Registration failed');
@@ -92,9 +108,9 @@ export default function RegisterForm({ onRegisterSuccess }: RegisterFormProps) {
   };
 
   return (
-    <div className="max-w-lg w-full mx-auto p-6 bg-white rounded-xl shadow-md">
+    <div className="max-w-lg w-full mx-auto p-8 bg-white/80 backdrop-blur-lg rounded-2xl shadow-xl border border-gray-200">
       <div className="text-center mb-8">
-        <h2 className="text-3xl font-bold text-gray-900">Create an Account</h2>
+        <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">Create an Account</h2>
         <p className="text-gray-600 mt-2">Join us to create and manage your events</p>
       </div>
       

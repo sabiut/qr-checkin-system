@@ -8,49 +8,49 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         sample_tags = [
             # Content Tags
-            ('Great Content', 'content', '✨', 'High-quality presentations and topics', True),
-            ('Engaging Speakers', 'content', '🎤', 'Excellent speakers and presentations', True),
-            ('Relevant Topics', 'content', '🎯', 'Content relevant to audience interests', True),
-            ('Poor Content', 'content', '📉', 'Content needs improvement', False),
-            ('Boring Presentations', 'content', '😴', 'Presentations lacked engagement', False),
+            ('Great Content', 'content', 'STAR', 'High-quality presentations and topics', True),
+            ('Engaging Speakers', 'content', 'MIC', 'Excellent speakers and presentations', True),
+            ('Relevant Topics', 'content', 'TARGET', 'Content relevant to audience interests', True),
+            ('Poor Content', 'content', 'DOWN', 'Content needs improvement', False),
+            ('Boring Presentations', 'content', 'SLEEP', 'Presentations lacked engagement', False),
             
             # Venue Tags
-            ('Perfect Venue', 'venue', '🏢', 'Excellent venue choice and setup', True),
-            ('Good Location', 'venue', '📍', 'Convenient and accessible location', True),
-            ('Poor Acoustics', 'venue', '🔇', 'Audio quality issues in venue', False),
-            ('Uncomfortable Seating', 'venue', '💺', 'Seating was uncomfortable', False),
-            ('Hard to Find', 'venue', '🗺️', 'Venue was difficult to locate', False),
+            ('Perfect Venue', 'venue', 'BUILDING', 'Excellent venue choice and setup', True),
+            ('Good Location', 'venue', 'PIN', 'Convenient and accessible location', True),
+            ('Poor Acoustics', 'venue', 'MUTE', 'Audio quality issues in venue', False),
+            ('Uncomfortable Seating', 'venue', 'SEAT', 'Seating was uncomfortable', False),
+            ('Hard to Find', 'venue', 'MAP', 'Venue was difficult to locate', False),
             
             # Organization Tags
-            ('Well Organized', 'organization', '⭐', 'Event was excellently organized', True),
-            ('Smooth Check-in', 'organization', '✅', 'Registration process was efficient', True),
-            ('Great Communication', 'organization', '📢', 'Clear communication before and during event', True),
-            ('Poor Planning', 'organization', '📋', 'Event organization needs improvement', False),
-            ('Confusing Schedule', 'organization', '⏰', 'Schedule was unclear or poorly communicated', False),
+            ('Well Organized', 'organization', 'STAR', 'Event was excellently organized', True),
+            ('Smooth Check-in', 'organization', 'CHECK', 'Registration process was efficient', True),
+            ('Great Communication', 'organization', 'SPEAKER', 'Clear communication before and during event', True),
+            ('Poor Planning', 'organization', 'BOARD', 'Event organization needs improvement', False),
+            ('Confusing Schedule', 'organization', 'CLOCK', 'Schedule was unclear or poorly communicated', False),
             
             # Technical Tags
-            ('Great Tech Setup', 'technical', '💻', 'Excellent technical infrastructure', True),
-            ('Good WiFi', 'technical', '📶', 'Reliable internet connectivity', True),
-            ('Tech Issues', 'technical', '⚠️', 'Technical problems during event', False),
-            ('Poor AV Quality', 'technical', '📽️', 'Audio/visual equipment had issues', False),
+            ('Great Tech Setup', 'technical', 'LAPTOP', 'Excellent technical infrastructure', True),
+            ('Good WiFi', 'technical', 'WIFI', 'Reliable internet connectivity', True),
+            ('Tech Issues', 'technical', 'WARNING', 'Technical problems during event', False),
+            ('Poor AV Quality', 'technical', 'PROJECTOR', 'Audio/visual equipment had issues', False),
             
             # Catering Tags
-            ('Delicious Food', 'catering', '🍽️', 'Great food and beverages', True),
-            ('Good Variety', 'catering', '🥗', 'Nice variety of food options', True),
-            ('Poor Food Quality', 'catering', '🍔', 'Food quality was disappointing', False),
-            ('Limited Options', 'catering', '🥪', 'Not enough food variety', False),
+            ('Delicious Food', 'catering', 'PLATE', 'Great food and beverages', True),
+            ('Good Variety', 'catering', 'SALAD', 'Nice variety of food options', True),
+            ('Poor Food Quality', 'catering', 'BURGER', 'Food quality was disappointing', False),
+            ('Limited Options', 'catering', 'SANDWICH', 'Not enough food variety', False),
             
             # Networking Tags
-            ('Great Networking', 'networking', '🤝', 'Excellent networking opportunities', True),
-            ('Met New People', 'networking', '👥', 'Connected with interesting people', True),
-            ('Limited Networking', 'networking', '🚫', 'Few networking opportunities', False),
+            ('Great Networking', 'networking', 'HANDSHAKE', 'Excellent networking opportunities', True),
+            ('Met New People', 'networking', 'PEOPLE', 'Connected with interesting people', True),
+            ('Limited Networking', 'networking', 'BLOCK', 'Few networking opportunities', False),
             
             # General Tags
-            ('Exceeded Expectations', 'general', '🌟', 'Event was better than expected', True),
-            ('Good Value', 'general', '💰', 'Great value for money', True),
-            ('Would Recommend', 'general', '👍', 'Would recommend to others', True),
-            ('Disappointing', 'general', '👎', 'Event did not meet expectations', False),
-            ('Too Expensive', 'general', '💸', 'Not good value for the price', False),
+            ('Exceeded Expectations', 'general', 'STAR', 'Event was better than expected', True),
+            ('Good Value', 'general', 'MONEY', 'Great value for money', True),
+            ('Would Recommend', 'general', 'THUMBS_UP', 'Would recommend to others', True),
+            ('Disappointing', 'general', 'THUMBS_DOWN', 'Event did not meet expectations', False),
+            ('Too Expensive', 'general', 'MONEY_FLY', 'Not good value for the price', False),
         ]
         
         created_count = 0

@@ -56,6 +56,14 @@ export default function NavBar() {
                 >
                   Home
                 </Link>
+                {isAuthenticated && (
+                  <Link
+                    to="/events"
+                    className="text-white hover:bg-indigo-500 hover:bg-opacity-75 px-3 py-2 rounded-md text-sm font-medium"
+                  >
+                    Events
+                  </Link>
+                )}
               </div>
             </div>
           </div>
@@ -204,6 +212,16 @@ export default function NavBar() {
             >
               Home
             </Link>
+            
+            {isAuthenticated && (
+              <Link
+                to="/communication"
+                className="text-white hover:bg-indigo-500 hover:bg-opacity-75 block px-3 py-2 rounded-md text-base font-medium"
+                onClick={() => setIsMobileMenuOpen(false)}
+              >
+                Communication
+              </Link>
+            )}
             
             {!isAuthenticated && (
               <>

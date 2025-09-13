@@ -33,7 +33,7 @@ services:
       - CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173,http://frontend:3000
       # Email Settings - Uncomment and set these for SMTP email, or leave console backend for development
       # For development (logs emails to console):
-      - EMAIL_BACKEND=django.core.mail.backends.console.EmailBackend
+      # - EMAIL_BACKEND=django.core.mail.backends.console.EmailBackend
       # For production with Gmail (uncomment these lines and fill in your details):
       # - EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
       # - EMAIL_HOST=smtp.gmail.com
@@ -47,6 +47,14 @@ services:
       - BASE_URL=http://localhost:8000
     depends_on:
       - db
+      - redis
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
 
   db:
     image: postgres:15
@@ -62,3 +70,4 @@ services:
 volumes:
   postgres_data:
   backend_media:
+  redis_data:

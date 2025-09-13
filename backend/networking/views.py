@@ -71,11 +71,12 @@ class AttendeeDirectoryViewSet(viewsets.ReadOnlyModelViewSet):
         if not settings or not settings.enable_attendee_directory:
             return NetworkingProfile.objects.none()
         
-        # Get attendees who are visible and attending this event
+        # Get attendees who are visible and invited to this event
+        # Note: Show all invited users, not just those who have attended, 
+        # to enable messaging between all event invitees
         queryset = NetworkingProfile.objects.filter(
             visible_in_directory=True,
-            user__invitations__event=event,
-            user__invitations__attendance__has_attended=True
+            user__invitations__event=event
         ).select_related('user').distinct()
         
         # Apply filters

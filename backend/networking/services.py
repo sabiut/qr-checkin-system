@@ -178,7 +178,7 @@ class NetworkingQRService:
                     
                     <div class="event-info">
                         <div class="event-name">{event.name}</div>
-                        <div class="networking-text">🤝 Let's Network!</div>
+                        <div class="networking-text">handshake Let's Network!</div>
                     </div>
                 </div>
             </body>

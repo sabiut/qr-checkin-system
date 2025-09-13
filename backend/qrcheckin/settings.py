@@ -32,6 +32,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework.authtoken',
     'corsheaders',
+    'channels',  # Enabled for WebSocket support
     
     # Local apps
     'events',
@@ -41,6 +42,7 @@ INSTALLED_APPS = [
     'gamification',
     'feedback_system',
     'networking',
+    'communication',
 ]
 
 MIDDLEWARE = [
@@ -75,6 +77,17 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'qrcheckin.wsgi.application'
+ASGI_APPLICATION = 'qrcheckin.asgi.application'  # Enabled for WebSocket support
+
+# Channel layer configuration for WebSocket support
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'CONFIG': {
+            "hosts": [('redis', 6379)],
+        },
+    },
+}
 
 # Database
 # https://docs.djangoproject.com/en/5.0/ref/settings/#databases
@@ -180,12 +193,18 @@ CSRF_TRUSTED_ORIGINS = [
 OFFLINE_MODE = os.environ.get('OFFLINE_MODE', 'False') == 'True'
 
 # Email settings
-EMAIL_BACKEND ='django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = os.environ.get('EMAIL_HOST', '')
+# Use environment variable to control email backend instead of DEBUG mode
+EMAIL_BACKEND = os.environ.get('EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend')
+EMAIL_HOST = os.environ.get('EMAIL_HOST', 'smtp.gmail.com')
 EMAIL_PORT = int(os.environ.get('EMAIL_PORT', 587))
 EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'True') == 'True'
 EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
+
+# For development debugging - uncomment to see emails in console instead:
+# if DEBUG:
+#     EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'sum.abiutaws@gmail.com')
 
 # Configure email logging (useful for debugging)

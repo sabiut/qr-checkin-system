@@ -84,7 +84,7 @@ class Badge(models.Model):
     name = models.CharField(max_length=100)
     description = models.TextField()
     badge_type = models.CharField(max_length=20, choices=BADGE_TYPES)
-    icon = models.CharField(max_length=50, default='🏆')  # Emoji or icon class
+    icon = models.CharField(max_length=50, default='trophy')  # Icon class
     color = models.CharField(max_length=7, default='#FFD700')  # Hex color
     
     # Badge criteria (stored as JSON)
@@ -154,7 +154,7 @@ class Achievement(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='achievements')
     title = models.CharField(max_length=200)
     description = models.TextField()
-    icon = models.CharField(max_length=50, default='🎯')
+    icon = models.CharField(max_length=50, default='target')
     
     achieved_at = models.DateTimeField(auto_now_add=True)
     event = models.ForeignKey(Event, on_delete=models.CASCADE, null=True, blank=True)

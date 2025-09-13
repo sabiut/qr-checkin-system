@@ -22,7 +22,7 @@ class Command(BaseCommand):
                 'name': 'First Steps',
                 'description': 'Attend your first event',
                 'badge_type': 'attendance',
-                'icon': '🎯',
+                'icon': 'target',
                 'color': '#4CAF50',
                 'criteria': {'events_required': 1, 'time_period': 'all_time'},
                 'points_reward': 10
@@ -49,7 +49,7 @@ class Command(BaseCommand):
                 'name': 'Attendance Champion',
                 'description': 'Attend 10 events',
                 'badge_type': 'attendance',
-                'icon': '🏆',
+                'icon': 'trophy',
                 'color': '#4CAF50',
                 'criteria': {'events_required': 10, 'time_period': 'all_time'},
                 'points_reward': 50
@@ -67,7 +67,7 @@ class Command(BaseCommand):
                 'name': 'Event Enthusiast',
                 'description': 'Attend 50 events',
                 'badge_type': 'attendance',
-                'icon': '🌟',
+                'icon': 'star',
                 'color': '#FF9800',
                 'criteria': {'events_required': 50, 'time_period': 'all_time'},
                 'points_reward': 200
@@ -76,7 +76,7 @@ class Command(BaseCommand):
                 'name': 'Three Day Streak',
                 'description': 'Maintain a 3-day attendance streak',
                 'badge_type': 'streak',
-                'icon': '🔥',
+                'icon': 'fire',
                 'color': '#FF5722',
                 'criteria': {'streak_required': 3, 'streak_type': 'current'},
                 'points_reward': 25
@@ -85,7 +85,7 @@ class Command(BaseCommand):
                 'name': 'Week Warrior',
                 'description': 'Maintain a 7-day attendance streak',
                 'badge_type': 'streak',
-                'icon': '🔥',
+                'icon': 'fire',
                 'color': '#F44336',
                 'criteria': {'streak_required': 7, 'streak_type': 'current'},
                 'points_reward': 50
@@ -103,7 +103,7 @@ class Command(BaseCommand):
                 'name': 'Monthly Achiever',
                 'description': 'Attend 30 days in a row',
                 'badge_type': 'streak',
-                'icon': '🏔️',
+                'icon': 'mountain',
                 'color': '#B71C1C',
                 'criteria': {'streak_required': 30, 'streak_type': 'current'},
                 'points_reward': 250
@@ -139,7 +139,7 @@ class Command(BaseCommand):
                 'name': 'Weekend Warrior',
                 'description': 'Attend weekend events',
                 'badge_type': 'special',
-                'icon': '🎉',
+                'icon': 'celebration',
                 'color': '#795548',
                 'criteria': {'weekend_events': 5},
                 'points_reward': 40

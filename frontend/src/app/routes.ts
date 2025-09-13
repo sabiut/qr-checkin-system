@@ -36,7 +36,19 @@ export default [
     file: "routes/events.$eventId.check-in.tsx",
   },
   {
+    path: "events/:eventId/communication",
+    file: "routes/events.$eventId.communication.tsx",
+  },
+  {
     path: "dashboard",
     file: "routes/dashboard.tsx",
+  },
+  {
+    path: "profile",
+    file: "routes/profile.tsx",
+  },
+  {
+    path: "settings",
+    file: "routes/settings.tsx",
   },
 ] satisfies RouteConfig;

@@ -16,6 +16,7 @@ urlpatterns = [
     path('api/gamification/', include('gamification.urls')),
     path('api/feedback/', include('feedback_system.urls')),
     path('', include('networking.urls')),
+    path('', include('communication.urls')),
     
     # Health check endpoints for deployment validation
     path('', include('health.urls')),

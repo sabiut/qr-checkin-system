@@ -147,7 +147,7 @@ def build_connection_html(connections, event: Event, current_user: User) -> str:
     if not connections:
         return f'''
         <div class="empty-state">
-            <div class="empty-icon">🤝</div>
+            <div class="empty-icon">handshake</div>
             <h3>No connections yet</h3>
             <p>Start networking by scanning QR codes or browsing the attendee directory!</p>
             <div class="empty-actions">
@@ -343,7 +343,7 @@ def networking_qr_page(request: HttpRequest, user_id: int, event_id: int) -> Htt
         <body>
             <div class="container">
                 <div class="header">
-                    <div class="title">📱 My Networking QR Code</div>
+                    <div class="title">mobile My Networking QR Code</div>
                     <div class="subtitle">Share this code to connect instantly</div>
                 </div>
                 
@@ -364,7 +364,7 @@ def networking_qr_page(request: HttpRequest, user_id: int, event_id: int) -> Htt
                 </div>
                 
                 <div class="instructions">
-                    <h3>🤝 How to Network:</h3>
+                    <h3>handshake How to Network:</h3>
                     <ul>
                         <li><strong>Show your QR code</strong> to people you meet</li>
                         <li><strong>Scan others' codes</strong> with your phone camera</li>
@@ -376,10 +376,10 @@ def networking_qr_page(request: HttpRequest, user_id: int, event_id: int) -> Htt
                 
                 <div class="actions">
                     <a href="javascript:window.print()" class="btn btn-primary">
-                        <span>🖨️</span> Print QR Code
+                        <span>print</span> Print QR Code
                     </a>
                     <a href="/networking/directory/{event.id}/" class="btn btn-secondary">
-                        <span>👥</span> Browse Attendees
+                        <span>people</span> Browse Attendees
                     </a>
                     <a href="/networking/connections/{event.id}/" class="btn btn-secondary">
                         <span>🔗</span> My Connections
@@ -456,7 +456,7 @@ def networking_directory_page(request: HttpRequest, event_id: int) -> HttpRespon
                     </div>
                     <div class="attendee-actions">
                         <button class="btn btn-connect" onclick="connectWith('{user.id}', '{name}')">
-                            <span class="btn-icon">🤝</span>
+                            <span class="btn-icon">handshake</span>
                             <span>Connect</span>
                             <span class="btn-hover-text">Let's network!</span>
                         </button>
@@ -828,7 +828,7 @@ def networking_directory_page(request: HttpRequest, event_id: int) -> HttpRespon
         <body>
             <div class="container">
                 <div class="header">
-                    <div class="title">👥 Attendee Directory</div>
+                    <div class="title">people Attendee Directory</div>
                     <div class="subtitle">Connect with fellow attendees at {event.name}</div>
                 </div>
                 
@@ -851,7 +851,7 @@ def networking_directory_page(request: HttpRequest, event_id: int) -> HttpRespon
                     <input 
                         type="text" 
                         class="search-input" 
-                        placeholder="🔍 Search attendees by name, company, title, or interests..." 
+                        placeholder="search Search attendees by name, company, title, or interests..." 
                         id="searchInput"
                         onkeyup="filterAttendees()"
                     >
@@ -868,7 +868,7 @@ def networking_directory_page(request: HttpRequest, event_id: int) -> HttpRespon
                 </div>
                 
                 <div class="no-results" id="noResults" style="display: none;">
-                    <div class="no-results-icon">🔍</div>
+                    <div class="no-results-icon">search</div>
                     <div class="no-results-text">No attendees found</div>
                     <div class="no-results-subtext">Try adjusting your search terms or filters</div>
                 </div>
@@ -892,7 +892,7 @@ def networking_directory_page(request: HttpRequest, event_id: int) -> HttpRespon
                     z-index: 1000; text-align: center; max-width: 400px; width: 90%;
                 `;
                 popup.innerHTML = `
-                    <div style="font-size: 48px; margin-bottom: 16px;">🤝</div>
+                    <div style="font-size: 48px; margin-bottom: 16px;">handshake</div>
                     <h3 style="margin: 0 0 12px 0; color: #1e293b;">Connect with ${{userName}}!</h3>
                     <p style="color: #64748b; margin-bottom: 24px; line-height: 1.4;">
                         Connection feature is coming soon! For now, find ${{userName}} at the event and scan their QR code to connect instantly.
@@ -987,7 +987,7 @@ def networking_directory_page(request: HttpRequest, event_id: int) -> HttpRespon
                 // Update search placeholder
                 const searchInput = document.getElementById('searchInput');
                 const placeholders = {{
-                    'all': '🔍 Search attendees by name, company, title, or interests...',
+                    'all': 'search Search attendees by name, company, title, or interests...',
                     'company': '🏢 Search by company name...',
                     'title': '💼 Search by job title...',
                     'interests': '⭐ Search by interests...'
@@ -1214,7 +1214,7 @@ def networking_connections_page(request: HttpRequest, event_id: int) -> HttpResp
                 </div>
                 
                 <div class="empty-state">
-                    <div class="empty-icon">🤝</div>
+                    <div class="empty-icon">handshake</div>
                     <div class="empty-title">No connections yet</div>
                     <div class="empty-subtitle">
                         Start networking at the event! Scan QR codes of people you meet<br>
@@ -1223,7 +1223,7 @@ def networking_connections_page(request: HttpRequest, event_id: int) -> HttpResp
                     
                     <div class="actions">
                         <a href="/networking/directory/{event.id}/" class="btn btn-primary">
-                            <span>👥</span> Browse Attendees
+                            <span>people</span> Browse Attendees
                         </a>
                         <a href="javascript:history.back()" class="btn btn-secondary">
                             <span>←</span> Back to Ticket
@@ -1852,7 +1852,7 @@ def networking_connect_page(request: HttpRequest, qr_token: str) -> HttpResponse
                             <span>&#129309;</span> Connect Now
                         </a>
                         <a href="/networking/directory/{event.id}/" class="btn btn-secondary">
-                            <span>👥</span> Browse Attendees
+                            <span>people</span> Browse Attendees
                         </a>
                     </div>
                 </div>
@@ -2020,7 +2020,7 @@ def networking_connect_action(request: HttpRequest) -> HttpResponse:
                         </div>
                         
                         <a href="/networking/directory/{event.id}/" class="btn">
-                            <span>👥</span> Browse Attendees
+                            <span>people</span> Browse Attendees
                         </a>
                     </div>
                 </div>
@@ -2140,7 +2140,7 @@ def networking_connect_action(request: HttpRequest) -> HttpResponse:
                         
                         <div class="actions">
                             <a href="/networking/directory/{event.id}/" class="btn btn-primary">
-                                <span>👥</span> Browse More Attendees
+                                <span>people</span> Browse More Attendees
                             </a>
                         </div>
                     </div>
@@ -2310,7 +2310,7 @@ def networking_connect_action(request: HttpRequest) -> HttpResponse:
                     
                     <div class="actions">
                         <a href="/networking/directory/{event.id}/" class="btn btn-primary">
-                            <span>👥</span> Continue Networking
+                            <span>people</span> Continue Networking
                         </a>
                         <a href="/networking/connections/{event.id}/" class="btn btn-secondary">
                             <span>&#129309;</span> My Connections

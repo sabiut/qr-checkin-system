@@ -115,7 +115,7 @@ class BadgeAdmin(admin.ModelAdmin):
                 'name': 'Attendance Champion',
                 'description': 'Attend 10 events',
                 'badge_type': 'attendance',
-                'icon': '🏆',
+                'icon': 'trophy',
                 'color': '#4CAF50',
                 'criteria': {'events_required': 10, 'time_period': 'all_time'},
                 'points_reward': 50
@@ -124,7 +124,7 @@ class BadgeAdmin(admin.ModelAdmin):
                 'name': 'Streak Master',
                 'description': 'Maintain a 7-day attendance streak',
                 'badge_type': 'streak',
-                'icon': '🔥',
+                'icon': 'fire',
                 'color': '#FF4444',
                 'criteria': {'streak_required': 7, 'streak_type': 'current'},
                 'points_reward': 25

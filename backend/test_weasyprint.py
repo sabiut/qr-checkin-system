@@ -61,8 +61,8 @@ if __name__ == "__main__":
     print("Testing WeasyPrint PDF generation...")
     result = test_weasyprint()
     if result:
-        print("✅ WeasyPrint is working correctly!")
+        print("SUCCESS: WeasyPrint is working correctly!")
         sys.exit(0)
     else:
-        print("❌ WeasyPrint test failed!")
+        print("ERROR: WeasyPrint test failed!")
         sys.exit(1)

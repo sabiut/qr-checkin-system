@@ -226,16 +226,16 @@ def generate_auth_page(page_type, errors=None, email='', username='', next_url='
     benefits_html = '''
         <div class="benefits">
             <div class="benefit-item">
-                <span>🏆</span> Earn badges for attendance and punctuality
+                <span>TROPHY</span> Earn badges for attendance and punctuality
             </div>
             <div class="benefit-item">
-                <span>🔥</span> Build streaks and climb leaderboards
+                <span>FIRE</span> Build streaks and climb leaderboards
             </div>
             <div class="benefit-item">
-                <span>📊</span> Track your event participation stats
+                <span>STATS</span> Track your event participation stats
             </div>
             <div class="benefit-item">
-                <span>🎯</span> Unlock special rewards and achievements
+                <span>TARGET</span> Unlock special rewards and achievements
             </div>
         </div>
     ''' if not is_login else ''
@@ -433,7 +433,7 @@ def generate_auth_page(page_type, errors=None, email='', username='', next_url='
     <body>
         <div class="auth-container">
             <div class="logo">
-                <div class="logo-icon">{'🔐' if is_login else '🎮'}</div>
+                <div class="logo-icon">{'SECURE' if is_login else 'GAME'}</div>
             </div>
             
             <h1>{'Welcome Back!' if is_login else 'Join the Fun!'}</h1>
