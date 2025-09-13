@@ -207,6 +207,9 @@ EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
 
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'sum.abiutaws@gmail.com')
 
+# Frontend URL for email links and guest responses
+FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:5173')
+
 # Configure email logging (useful for debugging)
 LOGGING = {
     'version': 1,

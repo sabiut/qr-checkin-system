@@ -230,19 +230,144 @@ class QAQuestionSerializer(serializers.ModelSerializer):
 
 class IcebreakerActivitySerializer(serializers.ModelSerializer):
     creator = UserBasicSerializer(read_only=True)
-    
+    time_ago = serializers.SerializerMethodField()
+    has_responded = serializers.SerializerMethodField()
+    guest_response_url = serializers.SerializerMethodField()
+
     class Meta:
         model = IcebreakerActivity
-        fields = ['id', 'event', 'creator', 'title', 'description', 'activity_type', 'created_at']
-        read_only_fields = ['id', 'creator']
+        fields = ['id', 'event', 'creator', 'title', 'description', 'activity_type',
+                  'activity_data', 'is_active', 'is_featured', 'allow_multiple_responses',
+                  'anonymous_responses', 'starts_at', 'ends_at', 'points_reward',
+                  'response_count', 'view_count', 'send_email_on_create', 'email_sent',
+                  'email_sent_at', 'created_at', 'time_ago', 'has_responded', 'guest_response_url']
+        read_only_fields = ['id', 'creator', 'response_count', 'view_count', 'guest_response_token',
+                           'email_sent', 'email_sent_at']
+
+    def get_time_ago(self, obj):
+        now = timezone.now()
+        diff = now - obj.created_at
+
+        if diff < timedelta(minutes=1):
+            return "just now"
+        elif diff < timedelta(hours=1):
+            minutes = int(diff.total_seconds() / 60)
+            return f"{minutes}m ago"
+        elif diff < timedelta(days=1):
+            hours = int(diff.total_seconds() / 3600)
+            return f"{hours}h ago"
+        elif diff < timedelta(days=7):
+            days = diff.days
+            return f"{days}d ago"
+        else:
+            return obj.created_at.strftime("%b %d, %Y")
+
+    def get_has_responded(self, obj):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            return obj.responses.filter(user=request.user).exists()
+        return False
+
+    def get_guest_response_url(self, obj):
+        request = self.context.get('request')
+        return obj.get_guest_response_url(request)
+
+    def create(self, validated_data):
+        from .email_utils import send_icebreaker_invitations
+
+        validated_data['creator'] = self.context['request'].user
+        send_email = validated_data.get('send_email_on_create', True)
+
+        # Create the activity
+        activity = super().create(validated_data)
+
+        # Send email invitations if requested
+        if send_email:
+            try:
+                sent_count = send_icebreaker_invitations(activity)
+                print(f"Icebreaker invitations sent to {sent_count} invitees")
+
+                # Update the activity to mark emails as sent
+                activity.email_sent = True
+                activity.email_sent_at = timezone.now()
+                activity.save(update_fields=['email_sent', 'email_sent_at'])
+            except Exception as e:
+                print(f"Failed to send icebreaker invitations: {str(e)}")
+                # Don't fail the activity creation if email fails
+
+        return activity
 
 class IcebreakerResponseSerializer(serializers.ModelSerializer):
     user = UserBasicSerializer(read_only=True)
-    
+    user_name = serializers.SerializerMethodField()
+    time_ago = serializers.SerializerMethodField()
+
     class Meta:
         model = IcebreakerResponse
-        fields = ['id', 'activity', 'user', 'response_data', 'created_at']
-        read_only_fields = ['id', 'user']
+        fields = ['id', 'activity', 'user', 'user_name', 'response_data', 'is_public',
+                  'points_earned', 'like_count', 'reply_count', 'guest_email', 'guest_name',
+                  'is_guest_response', 'created_at', 'time_ago']
+        read_only_fields = ['id', 'user', 'user_name', 'points_earned', 'like_count', 'reply_count']
+
+    def get_user_name(self, obj):
+        activity = obj.activity
+
+        # Handle anonymous responses
+        if activity.anonymous_responses:
+            return "Anonymous"
+
+        # Handle guest responses
+        if obj.is_guest_response:
+            return obj.guest_name or obj.guest_email.split('@')[0] if obj.guest_email else "Guest"
+
+        # Handle regular user responses
+        if obj.user:
+            return obj.user.get_full_name() or obj.user.username
+
+        return "Unknown"
+
+    def get_time_ago(self, obj):
+        now = timezone.now()
+        diff = now - obj.created_at
+
+        if diff < timedelta(minutes=1):
+            return "just now"
+        elif diff < timedelta(hours=1):
+            minutes = int(diff.total_seconds() / 60)
+            return f"{minutes}m ago"
+        elif diff < timedelta(days=1):
+            hours = int(diff.total_seconds() / 3600)
+            return f"{hours}h ago"
+        elif diff < timedelta(days=7):
+            days = diff.days
+            return f"{days}d ago"
+        else:
+            return obj.created_at.strftime("%b %d, %Y")
+
+    def create(self, validated_data):
+        request = self.context.get('request')
+
+        # Only set user if this is an authenticated request (not a guest response)
+        if request and request.user.is_authenticated:
+            validated_data['user'] = request.user
+            activity = validated_data['activity']
+
+            # Check if user already responded and multiple responses not allowed
+            if not activity.allow_multiple_responses:
+                existing_response = IcebreakerResponse.objects.filter(
+                    activity=activity,
+                    user=request.user
+                ).first()
+                if existing_response:
+                    raise serializers.ValidationError("You have already responded to this activity")
+
+            # Award points for authenticated users
+            validated_data['points_earned'] = activity.points_reward
+        else:
+            # Guest response - points_earned remains 0
+            validated_data['points_earned'] = 0
+
+        return super().create(validated_data)
 
 class NotificationPreferenceSerializer(serializers.ModelSerializer):
     class Meta:

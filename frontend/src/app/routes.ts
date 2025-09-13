@@ -18,6 +18,15 @@ export default [
     path: "contact",
     file: "routes/contact.tsx",
   },
+  // Public guest routes (no authentication required)
+  {
+    path: "rsvp/:invitationId",
+    file: "routes/rsvp.$invitationId.tsx",
+  },
+  {
+    path: "icebreaker/:token",
+    file: "routes/icebreaker.$token.tsx",
+  },
   // Protected routes that require authentication
   {
     path: "events",

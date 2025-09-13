@@ -12,6 +12,12 @@ type Params = {
   "/login": {};
   "/register": {};
   "/contact": {};
+  "/rsvp/:invitationId": {
+    "invitationId": string;
+  };
+  "/icebreaker/:token": {
+    "token": string;
+  };
   "/events": {};
   "/events/new": {};
   "/events/:eventId": {

@@ -303,16 +303,225 @@ class QAAnswerViewSet(viewsets.ModelViewSet):
 class IcebreakerActivityViewSet(viewsets.ModelViewSet):
     serializer_class = IcebreakerActivitySerializer
     permission_classes = [permissions.IsAuthenticated]
-    
+    pagination_class = StandardResultsSetPagination
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ['title', 'description']
+    ordering_fields = ['created_at', 'response_count', 'view_count']
+    ordering = ['-is_featured', '-created_at']
+
     def get_queryset(self):
-        return IcebreakerActivity.objects.filter(is_active=True)
+        user = self.request.user
+        event_id = self.request.query_params.get('event_id')
+
+        queryset = IcebreakerActivity.objects.filter(is_active=True)
+
+        # Filter by specific event if provided
+        if event_id:
+            queryset = queryset.filter(event_id=event_id)
+        else:
+            # Otherwise filter by events user is invited to
+            queryset = queryset.filter(
+                event__invitations__guest_email=user.email
+            )
+
+        queryset = queryset.select_related('creator', 'event').prefetch_related(
+            Prefetch('responses', queryset=IcebreakerResponse.objects.select_related('user'))
+        ).distinct()
+
+        # Filter by activity type if specified
+        activity_type = self.request.query_params.get('type')
+        if activity_type:
+            queryset = queryset.filter(activity_type=activity_type)
+
+        # Filter by featured activities
+        if self.request.query_params.get('featured') == 'true':
+            queryset = queryset.filter(is_featured=True)
+
+        # Filter by time - upcoming activities
+        if self.request.query_params.get('upcoming') == 'true':
+            now = timezone.now()
+            queryset = queryset.filter(
+                Q(starts_at__gt=now) | Q(starts_at__isnull=True)
+            )
+
+        return queryset
+
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+
+        # Increment view count
+        instance.view_count += 1
+        instance.save(update_fields=['view_count'])
+
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['get'])
+    def responses(self, request, pk=None):
+        activity = self.get_object()
+        responses = activity.responses.filter(is_public=True).select_related('user').order_by('-created_at')
+
+        page = self.paginate_queryset(responses)
+        if page is not None:
+            serializer = IcebreakerResponseSerializer(page, many=True, context={'request': request})
+            return self.get_paginated_response(serializer.data)
+
+        serializer = IcebreakerResponseSerializer(responses, many=True, context={'request': request})
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['post'])
+    def respond(self, request, pk=None):
+        activity = self.get_object()
+
+        # Check if activity is still active and within time bounds
+        now = timezone.now()
+        if activity.ends_at and now > activity.ends_at:
+            return Response({'error': 'This activity has ended'}, status=400)
+
+        if activity.starts_at and now < activity.starts_at:
+            return Response({'error': 'This activity has not started yet'}, status=400)
+
+        # Create response with activity context
+        serializer = IcebreakerResponseSerializer(
+            data={**request.data, 'activity': activity.id},
+            context={'request': request}
+        )
+
+        if serializer.is_valid():
+            response = serializer.save()
+
+            # Update activity response count
+            activity.response_count = activity.responses.count()
+            activity.save(update_fields=['response_count'])
+
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=False, methods=['get'])
+    def my_responses(self, request):
+        user = request.user
+        event_id = request.query_params.get('event_id')
+
+        responses = IcebreakerResponse.objects.filter(user=user)
+        if event_id:
+            responses = responses.filter(activity__event_id=event_id)
+
+        responses = responses.select_related('user', 'activity').order_by('-created_at')
+
+        page = self.paginate_queryset(responses)
+        if page is not None:
+            serializer = IcebreakerResponseSerializer(page, many=True, context={'request': request})
+            return self.get_paginated_response(serializer.data)
+
+        serializer = IcebreakerResponseSerializer(responses, many=True, context={'request': request})
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['get', 'post'], permission_classes=[])
+    def guest_response(self, request):
+        """Public endpoint for guest responses using token"""
+        token = request.query_params.get('token') or request.data.get('token')
+
+        if not token:
+            return Response({'error': 'Token required'}, status=400)
+
+        try:
+            activity = IcebreakerActivity.objects.get(guest_response_token=token, is_active=True)
+        except IcebreakerActivity.DoesNotExist:
+            return Response({'error': 'Invalid or expired token'}, status=404)
+
+        if request.method == 'GET':
+            # Return activity details for guest response page
+            serializer = IcebreakerActivitySerializer(activity, context={'request': request})
+            return Response(serializer.data)
+
+        elif request.method == 'POST':
+            # Handle guest response submission
+            guest_email = request.data.get('guest_email')
+            guest_name = request.data.get('guest_name', '')
+            response_data = request.data.get('response_data', {})
+
+            if not guest_email:
+                return Response({'error': 'Guest email required'}, status=400)
+
+            # Check if guest already responded (unless multiple responses allowed)
+            if not activity.allow_multiple_responses:
+                existing_response = IcebreakerResponse.objects.filter(
+                    activity=activity,
+                    guest_email=guest_email,
+                    is_guest_response=True
+                ).first()
+                if existing_response:
+                    return Response({'error': 'You have already responded to this activity'}, status=400)
+
+            # Check time bounds
+            now = timezone.now()
+            if activity.ends_at and now > activity.ends_at:
+                return Response({'error': 'This activity has ended'}, status=400)
+            if activity.starts_at and now < activity.starts_at:
+                return Response({'error': 'This activity has not started yet'}, status=400)
+
+            # Create guest response
+            response = IcebreakerResponse.objects.create(
+                activity=activity,
+                guest_email=guest_email,
+                guest_name=guest_name,
+                response_data=response_data,
+                is_guest_response=True,
+                is_public=not activity.anonymous_responses,
+                points_earned=0  # Guests don't earn points
+            )
+
+            # Update activity response count
+            activity.response_count = activity.responses.count()
+            activity.save(update_fields=['response_count'])
+
+            serializer = IcebreakerResponseSerializer(response, context={'request': request})
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 class IcebreakerResponseViewSet(viewsets.ModelViewSet):
     serializer_class = IcebreakerResponseSerializer
     permission_classes = [permissions.IsAuthenticated]
-    
+    pagination_class = StandardResultsSetPagination
+
     def get_queryset(self):
-        return IcebreakerResponse.objects.all()
+        user = self.request.user
+        activity_id = self.request.query_params.get('activity_id')
+
+        queryset = IcebreakerResponse.objects.filter(is_public=True)
+
+        if activity_id:
+            queryset = queryset.filter(activity_id=activity_id)
+
+        return queryset.select_related('user', 'activity').order_by('-created_at')
+
+    def list(self, request, *args, **kwargs):
+        # Only show public responses unless it's the user's own response
+        queryset = self.get_queryset()
+        user = request.user
+
+        # Include user's own responses even if private
+        own_responses = IcebreakerResponse.objects.filter(user=user)
+        activity_id = request.query_params.get('activity_id')
+        if activity_id:
+            own_responses = own_responses.filter(activity_id=activity_id)
+
+        # Combine public responses and user's own responses
+        combined_queryset = (queryset.union(own_responses)
+                           .select_related('user', 'activity')
+                           .order_by('-created_at'))
+
+        page = self.paginate_queryset(combined_queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = self.get_serializer(combined_queryset, many=True)
+        return Response(serializer.data)
+
+    def perform_create(self, serializer):
+        # This is handled through the activity respond endpoint
+        pass
 
 class NotificationPreferenceViewSet(viewsets.ModelViewSet):
     serializer_class = NotificationPreferenceSerializer
