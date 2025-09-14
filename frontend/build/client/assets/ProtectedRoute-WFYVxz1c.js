@@ -1,0 +1,1 @@
+import{r as s,l as t,N as a,O as n}from"./chunk-K6CSEXPM--6-6YwCy.js";import{A as u}from"./AuthContext-ChgrtSKK.js";function m({redirectPath:r="/login",children:e}){const{isAuthenticated:o}=s.useContext(u);return o?e?t.jsx(t.Fragment,{children:e}):t.jsx(n,{}):t.jsx(a,{to:r,replace:!0})}export{m as P};
