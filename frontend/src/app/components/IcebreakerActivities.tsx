@@ -141,7 +141,7 @@ export const IcebreakerActivities: React.FC<IcebreakerActivitiesProps> = ({
   const fetchResponses = async (activityId: string) => {
     try {
       console.log('Fetching responses for activity:', activityId);
-      const response = await fetch(`${API_BASE}/api/communication/icebreakers/${activityId}/responses/`, {
+      const response = await fetch(`${API_BASE}/api/communication/icebreaker-responses/?activity_id=${activityId}`, {
         headers: {
           'Authorization': `Token ${token}`,
           'Content-Type': 'application/json',
@@ -546,7 +546,7 @@ export const IcebreakerActivities: React.FC<IcebreakerActivitiesProps> = ({
   const handleReaction = async (responseId: string, reactionType: string) => {
     try {
       const token = localStorage.getItem('auth_token');
-      const response = await fetch(`/api/communication/icebreaker-responses/${responseId}/react/`, {
+      const response = await fetch(`${API_BASE}/api/communication/icebreaker-responses/${responseId}/react/`, {
         method: 'POST',
         headers: {
           'Authorization': `Token ${token}`,
