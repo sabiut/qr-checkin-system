@@ -346,6 +346,7 @@ class IcebreakerResponseSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         request = self.context.get('request')
+        from django.utils import timezone
 
         # Only set user if this is an authenticated request (not a guest response)
         if request and request.user.is_authenticated:
@@ -361,13 +362,18 @@ class IcebreakerResponseSerializer(serializers.ModelSerializer):
                 if existing_response:
                     raise serializers.ValidationError("You have already responded to this activity")
 
-            # Award points for authenticated users
-            validated_data['points_earned'] = activity.points_reward
-        else:
-            # Guest response - points_earned remains 0
-            validated_data['points_earned'] = 0
+            # Calculate response time (if activity has a start time)
+            if activity.starts_at:
+                response_time = (timezone.now() - activity.starts_at).total_seconds()
+                validated_data['response_time_seconds'] = max(0, int(response_time))
 
-        return super().create(validated_data)
+        # Create the response first without points calculation
+        response = super().create(validated_data)
+
+        # Now calculate points dynamically (this handles both authenticated and guest users)
+        response.calculate_points(save=True)
+
+        return response
 
 class NotificationPreferenceSerializer(serializers.ModelSerializer):
     class Meta:

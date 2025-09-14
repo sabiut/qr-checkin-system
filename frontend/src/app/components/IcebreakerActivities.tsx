@@ -21,6 +21,8 @@ import {
   Mail,
   Calendar
 } from 'lucide-react';
+import IcebreakerLeaderboard from './IcebreakerLeaderboard';
+import IcebreakerResponseCard from './IcebreakerResponseCard';
 
 interface IcebreakerActivity {
   id: string;
@@ -78,11 +80,19 @@ export const IcebreakerActivities: React.FC<IcebreakerActivitiesProps> = ({
   const [loading, setLoading] = useState(false);
   const [isSubmittingResponse, setIsSubmittingResponse] = useState(false);
   const [showResponseForm, setShowResponseForm] = useState(false);
-  const [activeTab, setActiveTab] = useState<'respond' | 'analytics'>('respond');
+  const [activeTab, setActiveTab] = useState<'respond' | 'analytics' | 'leaderboard'>('respond');
   const [analyticsData, setAnalyticsData] = useState<any>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [isCreatingActivity, setIsCreatingActivity] = useState(false);
   const [filter, setFilter] = useState<'all' | 'featured' | 'upcoming'>('all');
+
+  // Auto-generation states
+  const [showGenerateModal, setShowGenerateModal] = useState(false);
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [templatePacks, setTemplatePacks] = useState<any[]>([]);
+  const [selectedPack, setSelectedPack] = useState('smart_pack');
+  const [previewActivities, setPreviewActivities] = useState<any[]>([]);
+  const [isGenerating, setIsGenerating] = useState(false);
 
   // New activity form state
   const [newActivity, setNewActivity] = useState({
@@ -130,6 +140,7 @@ export const IcebreakerActivities: React.FC<IcebreakerActivitiesProps> = ({
   // Fetch responses for an activity
   const fetchResponses = async (activityId: string) => {
     try {
+      console.log('Fetching responses for activity:', activityId);
       const response = await fetch(`${API_BASE}/api/communication/icebreakers/${activityId}/responses/`, {
         headers: {
           'Authorization': `Token ${token}`,
@@ -137,9 +148,16 @@ export const IcebreakerActivities: React.FC<IcebreakerActivitiesProps> = ({
         },
       });
 
+      console.log('Responses fetch status:', response.status);
       if (response.ok) {
         const data = await response.json();
+        console.log('Responses data:', data);
+        console.log('Setting responses:', data.results || data);
         setResponses(data.results || data);
+      } else {
+        console.error('Failed to fetch responses:', response.status, response.statusText);
+        const errorText = await response.text();
+        console.error('Error response:', errorText);
       }
     } catch (err) {
       console.error('Error fetching responses:', err);
@@ -356,10 +374,103 @@ export const IcebreakerActivities: React.FC<IcebreakerActivitiesProps> = ({
     }
   };
 
+  // Fetch template packs
+  const fetchTemplatePacks = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/api/communication/icebreakers/template_packs/`, {
+        headers: {
+          'Authorization': `Token ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setTemplatePacks(data);
+      }
+    } catch (err) {
+      console.error('Error fetching template packs:', err);
+    }
+  };
+
+  // Generate preview
+  const generatePreview = async () => {
+    try {
+      setIsGenerating(true);
+      const response = await fetch(`${API_BASE}/api/communication/icebreakers/generate/`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Token ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          event_id: parseInt(eventId),
+          pack_type: selectedPack,
+          preview_only: true
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setPreviewActivities(data.activities);
+        setShowGenerateModal(false);
+        setShowPreviewModal(true);
+      } else {
+        const errorData = await response.json();
+        showError(errorData.error || 'Failed to generate preview');
+      }
+    } catch (err) {
+      console.error('Error generating preview:', err);
+      showError('Network error: Could not generate preview');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  // Generate and create activities
+  const generateActivities = async (autoSend = false) => {
+    try {
+      setIsGenerating(true);
+      const response = await fetch(`${API_BASE}/api/communication/icebreakers/generate/`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Token ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          event_id: parseInt(eventId),
+          pack_type: selectedPack,
+          auto_schedule: true,
+          auto_send: autoSend
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setShowPreviewModal(false);
+        fetchActivities(); // Refresh activities list
+        showSuccess(
+          `🎉 Created ${data.created} icebreaker activities! ${
+            data.auto_sent ? 'The first one has been sent to all invitees.' : ''
+          }`
+        );
+      } else {
+        const errorData = await response.json();
+        showError(errorData.error || 'Failed to generate activities');
+      }
+    } catch (err) {
+      console.error('Error generating activities:', err);
+      showError('Network error: Could not generate activities');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   // Load activities on component mount and filter change
   useEffect(() => {
     if (token && eventId) {
       fetchActivities();
+      fetchTemplatePacks();
     }
   }, [token, eventId, filter]);
 
@@ -431,6 +542,40 @@ export const IcebreakerActivities: React.FC<IcebreakerActivitiesProps> = ({
     }
   }, [responses]);
 
+  // Handle reactions
+  const handleReaction = async (responseId: string, reactionType: string) => {
+    try {
+      const token = localStorage.getItem('auth_token');
+      const response = await fetch(`/api/communication/icebreaker-responses/${responseId}/react/`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Token ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          reaction_type: reactionType
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+
+        // Refresh responses to show updated reaction counts and points
+        if (selectedActivity) {
+          fetchResponses(selectedActivity.id);
+        }
+
+        showSuccess(data.message || 'Reaction added!');
+      } else {
+        const errorData = await response.json();
+        showError(errorData.error || 'Failed to add reaction');
+      }
+    } catch (error) {
+      console.error('Error adding reaction:', error);
+      showError('Failed to add reaction');
+    }
+  };
+
   return (
     <div className="flex-1 overflow-y-auto bg-gradient-to-br from-gray-50 to-white">
       <div className="max-w-6xl mx-auto p-6">
@@ -442,6 +587,16 @@ export const IcebreakerActivities: React.FC<IcebreakerActivitiesProps> = ({
           </div>
 
           <div className="flex items-center space-x-3">
+            {/* Magic Generation Button */}
+            <button
+              onClick={() => setShowGenerateModal(true)}
+              className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-purple-500 via-pink-500 to-indigo-500 text-white rounded-xl font-semibold shadow-lg shadow-purple-500/25 hover:shadow-xl hover:scale-105 transition-all duration-200 relative overflow-hidden"
+            >
+              <div className="absolute inset-0 bg-gradient-to-r from-purple-400 via-pink-400 to-indigo-400 opacity-0 hover:opacity-100 transition-opacity duration-200"></div>
+              <span className="text-xl relative z-10">✨</span>
+              <span className="relative z-10">Generate Fun Icebreakers</span>
+            </button>
+
             {/* Create Activity Button */}
             <button
               onClick={() => setShowCreateForm(true)}
@@ -842,25 +997,36 @@ export const IcebreakerActivities: React.FC<IcebreakerActivitiesProps> = ({
                 <div className="flex mb-6">
                   <button
                     onClick={() => setActiveTab('respond')}
-                    className={`flex-1 py-2 px-4 text-sm font-medium rounded-l-lg transition-colors ${
+                    className={`flex-1 py-2 px-3 text-xs font-medium rounded-l-lg transition-colors ${
                       activeTab === 'respond'
                         ? 'bg-blue-500 text-white'
                         : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                     }`}
                   >
-                    <Send className="w-4 h-4 inline mr-2" />
+                    <Send className="w-3 h-3 inline mr-1" />
                     Respond
                   </button>
                   <button
                     onClick={() => setActiveTab('analytics')}
-                    className={`flex-1 py-2 px-4 text-sm font-medium rounded-r-lg transition-colors ${
+                    className={`flex-1 py-2 px-3 text-xs font-medium transition-colors ${
                       activeTab === 'analytics'
                         ? 'bg-blue-500 text-white'
                         : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                     }`}
                   >
-                    <BarChart3 className="w-4 h-4 inline mr-2" />
+                    <BarChart3 className="w-3 h-3 inline mr-1" />
                     Analytics
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('leaderboard')}
+                    className={`flex-1 py-2 px-3 text-xs font-medium rounded-r-lg transition-colors ${
+                      activeTab === 'leaderboard'
+                        ? 'bg-blue-500 text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    <Trophy className="w-3 h-3 inline mr-1" />
+                    Leaderboard
                   </button>
                 </div>
 
@@ -947,7 +1113,7 @@ export const IcebreakerActivities: React.FC<IcebreakerActivitiesProps> = ({
                       </div>
                     </div>
                   </>
-                ) : (
+                ) : activeTab === 'analytics' ? (
                   /* Analytics Tab Content */
                   <div className="space-y-6">
                     {analyticsData && (
@@ -1068,7 +1234,12 @@ export const IcebreakerActivities: React.FC<IcebreakerActivitiesProps> = ({
                       </>
                     )}
                   </div>
-                )}
+                ) : activeTab === 'leaderboard' ? (
+                  /* Leaderboard Tab Content */
+                  <div className="space-y-6">
+                    <IcebreakerLeaderboard eventId={eventId} />
+                  </div>
+                ) : null}
               </div>
             ) : (
               <div className="bg-white rounded-2xl shadow-sm p-12 text-center">
@@ -1079,6 +1250,214 @@ export const IcebreakerActivities: React.FC<IcebreakerActivitiesProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Generate Icebreakers Modal */}
+      {showGenerateModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-2xl font-bold text-gray-900 flex items-center">
+                    <span className="text-3xl mr-3">✨</span>
+                    Generate Icebreakers
+                  </h3>
+                  <p className="text-gray-600 mt-1">Choose a pack that fits your event perfectly</p>
+                </div>
+                <button
+                  onClick={() => setShowGenerateModal(false)}
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6">
+              <div className="grid gap-4">
+                {templatePacks.map((pack) => (
+                  <div
+                    key={pack.id}
+                    onClick={() => setSelectedPack(pack.id)}
+                    className={`p-6 border-2 rounded-xl cursor-pointer transition-all duration-200 ${
+                      selectedPack === pack.id
+                        ? 'border-purple-500 bg-purple-50 shadow-lg'
+                        : 'border-gray-200 hover:border-purple-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    <div className="flex items-start space-x-4">
+                      <div className="text-3xl">{pack.icon}</div>
+                      <div className="flex-1">
+                        <h4 className="text-lg font-semibold text-gray-900">{pack.name}</h4>
+                        <p className="text-gray-600 mt-1">{pack.description}</p>
+                      </div>
+                      {selectedPack === pack.id && (
+                        <div className="text-purple-500">
+                          <CheckCircle className="w-6 h-6" />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex justify-end space-x-3 mt-8 pt-6 border-t border-gray-200">
+                <button
+                  onClick={() => setShowGenerateModal(false)}
+                  className="px-6 py-3 border border-gray-300 text-gray-700 rounded-xl font-medium hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={generatePreview}
+                  disabled={isGenerating || !selectedPack}
+                  className="px-8 py-3 bg-gradient-to-r from-purple-500 to-indigo-500 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl disabled:opacity-50 transition-all duration-200 flex items-center space-x-2"
+                >
+                  {isGenerating ? (
+                    <>
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                      <span>Generating...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>👀</span>
+                      <span>Preview Activities</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Preview Modal */}
+      {showPreviewModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[80vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-2xl font-bold text-gray-900 flex items-center">
+                    <span className="text-3xl mr-3">🎉</span>
+                    Ready to Create!
+                  </h3>
+                  <p className="text-gray-600 mt-1">
+                    We've prepared {previewActivities.length} engaging icebreaker activities
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowPreviewModal(false)}
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6">
+              <div className="space-y-4 mb-8">
+                {previewActivities.map((activity, index) => (
+                  <div key={index} className="border border-gray-200 rounded-xl p-5 bg-gray-50">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center space-x-3">
+                        <span className="text-2xl">
+                          {activity.activity_type === 'poll' && '🗳️'}
+                          {activity.activity_type === 'quiz' && '🧠'}
+                          {activity.activity_type === 'question' && '💭'}
+                          {activity.activity_type === 'introduction' && '👋'}
+                          {activity.activity_type === 'challenge' && '🎯'}
+                        </span>
+                        <div>
+                          <h4 className="font-semibold text-gray-900">{activity.title}</h4>
+                          <p className="text-sm text-gray-600">{activity.description}</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-sm text-purple-600 font-medium">
+                          🏆 {activity.points_reward} points
+                        </div>
+                        {activity.starts_at && (
+                          <div className="text-xs text-gray-500 mt-1">
+                            Sends: {new Date(activity.starts_at).toLocaleDateString()}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {activity.activity_data.question && (
+                      <div className="mt-3 p-3 bg-white rounded-lg">
+                        <p className="text-sm font-medium text-gray-700">{activity.activity_data.question}</p>
+                        {activity.activity_data.options && (
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {activity.activity_data.options.map((option: string, idx: number) => (
+                              <span key={idx} className="px-2 py-1 bg-gray-100 text-xs rounded-full text-gray-600">
+                                {option}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {activity.activity_data.prompt && (
+                      <div className="mt-3 p-3 bg-white rounded-lg">
+                        <p className="text-sm text-gray-700">{activity.activity_data.prompt}</p>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
+                <div className="flex items-start space-x-3">
+                  <span className="text-2xl">🚀</span>
+                  <div>
+                    <h4 className="font-semibold text-blue-900">Auto-Scheduling Included!</h4>
+                    <p className="text-blue-700 text-sm mt-1">
+                      These activities will be automatically scheduled leading up to your event.
+                      The first one can be sent immediately to get the engagement started!
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">
+                <button
+                  onClick={() => setShowPreviewModal(false)}
+                  className="px-6 py-3 border border-gray-300 text-gray-700 rounded-xl font-medium hover:bg-gray-50 transition-colors"
+                >
+                  Back to Selection
+                </button>
+                <button
+                  onClick={() => generateActivities(false)}
+                  disabled={isGenerating}
+                  className="px-6 py-3 bg-gray-600 text-white rounded-xl font-semibold hover:bg-gray-700 disabled:opacity-50 transition-colors"
+                >
+                  Create Activities Only
+                </button>
+                <button
+                  onClick={() => generateActivities(true)}
+                  disabled={isGenerating}
+                  className="px-8 py-3 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl disabled:opacity-50 transition-all duration-200 flex items-center space-x-2"
+                >
+                  {isGenerating ? (
+                    <>
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                      <span>Creating...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>📧</span>
+                      <span>Create & Send First One</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
