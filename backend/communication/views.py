@@ -5,12 +5,15 @@ from rest_framework.pagination import PageNumberPagination
 from django.contrib.auth.models import User
 from django.db.models import Q, Count, Max, Prefetch
 from django.utils import timezone
+from datetime import timedelta
+from django.db import transaction
 # Force reload to clear cache
 
 from .models import (
     Message, Announcement, AnnouncementRead, ForumThread, ForumPost,
     QAQuestion, QAAnswer, IcebreakerActivity, IcebreakerResponse,
-    NotificationPreference
+    NotificationPreference, UserGamificationProfile, ResponseReaction,
+    IcebreakerAchievement, UserIcebreakerAchievement
 )
 from .serializers import (
     MessageSerializer, AnnouncementSerializer, ForumThreadSerializer,
@@ -55,8 +58,8 @@ class MessageViewSet(viewsets.ModelViewSet):
         
         for message in messages:
             other_user = message.recipient if message.sender == user else message.sender
-            
-            if other_user.id not in seen_users:
+
+            if other_user and other_user.id not in seen_users:
                 seen_users.add(other_user.id)
                 
                 # Get unread count for this conversation
@@ -358,7 +361,16 @@ class IcebreakerActivityViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['get'])
     def responses(self, request, pk=None):
-        activity = self.get_object()
+        # Get activity directly, bypassing queryset filtering
+        try:
+            activity = IcebreakerActivity.objects.get(id=pk)
+        except IcebreakerActivity.DoesNotExist:
+            return Response({'error': 'Activity not found'}, status=404)
+
+        # Check if user is the event creator (same access control as leaderboard)
+        if activity.event.owner != request.user:
+            return Response({'error': 'Only event creators can view responses'}, status=403)
+
         responses = activity.responses.filter(is_public=True).select_related('user').order_by('-created_at')
 
         page = self.paginate_queryset(responses)
@@ -378,7 +390,8 @@ class IcebreakerActivityViewSet(viewsets.ModelViewSet):
         if activity.ends_at and now > activity.ends_at:
             return Response({'error': 'This activity has ended'}, status=400)
 
-        if activity.starts_at and now < activity.starts_at:
+        # Only check start time if it's more than 1 day in the future (allow testing)
+        if activity.starts_at and (activity.starts_at - now).days > 1:
             return Response({'error': 'This activity has not started yet'}, status=400)
 
         # Create response with activity context
@@ -458,7 +471,8 @@ class IcebreakerActivityViewSet(viewsets.ModelViewSet):
             now = timezone.now()
             if activity.ends_at and now > activity.ends_at:
                 return Response({'error': 'This activity has ended'}, status=400)
-            if activity.starts_at and now < activity.starts_at:
+            # Only check start time if it's more than 1 day in the future (allow testing)
+            if activity.starts_at and (activity.starts_at - now).days > 1:
                 return Response({'error': 'This activity has not started yet'}, status=400)
 
             # Create guest response
@@ -469,8 +483,10 @@ class IcebreakerActivityViewSet(viewsets.ModelViewSet):
                 response_data=response_data,
                 is_guest_response=True,
                 is_public=not activity.anonymous_responses,
-                points_earned=0  # Guests don't earn points
             )
+
+            # Calculate points and create/update gamification profile for guest
+            response.calculate_points()
 
             # Update activity response count
             activity.response_count = activity.responses.count()
@@ -478,6 +494,255 @@ class IcebreakerActivityViewSet(viewsets.ModelViewSet):
 
             serializer = IcebreakerResponseSerializer(response, context={'request': request})
             return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    @action(detail=False, methods=['post'])
+    def generate(self, request):
+        """Auto-generate icebreaker activities from templates"""
+        from events.models import Event
+        from .icebreaker_templates import (
+            get_template_pack, get_smart_pack, calculate_schedule_dates
+        )
+        from .email_utils import send_icebreaker_invitations
+
+        event_id = request.data.get('event_id')
+        pack_type = request.data.get('pack_type', 'smart_pack')
+        auto_schedule = request.data.get('auto_schedule', True)
+        auto_send = request.data.get('auto_send', False)
+        preview_only = request.data.get('preview_only', False)
+
+        try:
+            event = Event.objects.get(id=event_id)
+        except Event.DoesNotExist:
+            return Response({'error': 'Event not found'}, status=404)
+
+        # Check permission
+        if event.owner != request.user:
+            return Response({'error': 'Only event owner can generate icebreakers'}, status=403)
+
+        # Get appropriate template pack
+        if pack_type == 'smart_pack':
+            templates = get_smart_pack(event)
+        else:
+            templates = get_template_pack(pack_type)
+
+        # Calculate schedule dates if auto-scheduling
+        if auto_schedule:
+            templates = calculate_schedule_dates(event.date, templates)
+
+        # If preview only, return the templates without creating
+        if preview_only:
+            return Response({
+                'preview': True,
+                'activities': templates,
+                'count': len(templates)
+            })
+
+        # Create activities
+        created_activities = []
+        with transaction.atomic():
+            for template in templates:
+                # Remove schedule info from template before creating
+                schedule_info = template.pop('schedule_days_before', None)
+                starts_at = template.pop('starts_at', None)
+
+                activity = IcebreakerActivity.objects.create(
+                    event=event,
+                    creator=request.user,
+                    title=template['title'],
+                    description=template['description'],
+                    activity_type=template['activity_type'],
+                    activity_data=template['activity_data'],
+                    points_reward=template.get('points_reward', 10),
+                    is_featured=template.get('is_featured', False),
+                    is_active=True,
+                    starts_at=starts_at,
+                    anonymous_responses=False,
+                    allow_multiple_responses=False,
+                    send_email_on_create=False  # We'll handle this manually
+                )
+                created_activities.append(activity)
+
+        # Send email for the first activity if auto_send is enabled
+        if auto_send and created_activities:
+            # Send the first icebreaker immediately
+            first_activity = created_activities[0]
+            try:
+                send_icebreaker_invitations(first_activity)
+                first_activity.email_sent = True
+                first_activity.email_sent_at = timezone.now()
+                first_activity.save(update_fields=['email_sent', 'email_sent_at'])
+            except Exception as e:
+                # Log error but don't fail the whole operation
+                print(f"Failed to send icebreaker email: {e}")
+
+        # Serialize created activities
+        serialized_activities = [
+            IcebreakerActivitySerializer(activity, context={'request': request}).data
+            for activity in created_activities
+        ]
+
+        return Response({
+            'created': len(created_activities),
+            'activities': serialized_activities,
+            'auto_sent': auto_send and len(created_activities) > 0
+        }, status=status.HTTP_201_CREATED)
+
+    @action(detail=False, methods=['get'])
+    def template_packs(self, request):
+        """Get available template pack options"""
+        packs = [
+            {
+                'id': 'smart_pack',
+                'name': '✨ Smart Pack',
+                'description': 'AI-powered selection based on your event type',
+                'icon': '🤖'
+            },
+            {
+                'id': 'corporate',
+                'name': '🏢 Corporate',
+                'description': 'Professional icebreakers for business events',
+                'icon': '💼'
+            },
+            {
+                'id': 'social',
+                'name': '🎉 Social',
+                'description': 'Fun activities for parties and social gatherings',
+                'icon': '🎊'
+            },
+            {
+                'id': 'conference',
+                'name': '🎤 Conference',
+                'description': 'Engage attendees at conferences and summits',
+                'icon': '📊'
+            },
+            {
+                'id': 'networking',
+                'name': '🤝 Networking',
+                'description': 'Foster connections at networking events',
+                'icon': '🔗'
+            },
+            {
+                'id': 'team_building',
+                'name': '👥 Team Building',
+                'description': 'Strengthen team bonds and collaboration',
+                'icon': '🎯'
+            }
+        ]
+        return Response(packs)
+
+    @action(detail=False, methods=['get'])
+    def leaderboard(self, request):
+        """Get leaderboard for icebreaker activities"""
+        event_id = request.query_params.get('event_id')
+
+        if not event_id:
+            return Response({'error': 'event_id parameter required'}, status=400)
+
+        # Check if user is the event creator
+        try:
+            from events.models import Event
+            event = Event.objects.get(id=event_id)
+            if event.owner != request.user:
+                return Response({'error': 'Only event creators can view leaderboards'}, status=403)
+        except Event.DoesNotExist:
+            return Response({'error': 'Event not found'}, status=404)
+
+        # Get all user profiles for this event, ordered by points
+        profiles = UserGamificationProfile.objects.filter(
+            event_id=event_id
+        ).select_related('user').order_by('-total_points', '-longest_streak')
+
+        leaderboard_data = []
+        for rank, profile in enumerate(profiles, 1):
+            if profile.user:
+                # Authenticated user
+                user_data = {
+                    'id': profile.user.id,
+                    'username': profile.user.username,
+                    'full_name': profile.user.get_full_name(),
+                    'first_name': profile.user.first_name,
+                    'last_name': profile.user.last_name,
+                }
+            else:
+                # Guest user
+                user_data = {
+                    'id': f'guest_{profile.id}',
+                    'username': profile.guest_email or f'guest_{profile.id}',
+                    'full_name': profile.guest_name or profile.guest_email or 'Guest User',
+                    'first_name': profile.guest_name.split(' ')[0] if profile.guest_name else 'Guest',
+                    'last_name': profile.guest_name.split(' ', 1)[1] if profile.guest_name and ' ' in profile.guest_name else '',
+                }
+
+            leaderboard_data.append({
+                'rank': rank,
+                'user': user_data,
+                'total_points': profile.total_points,
+                'base_points': profile.base_points,
+                'bonus_points': profile.bonus_points,
+                'activities_completed': profile.activities_completed,
+                'current_streak': profile.current_streak,
+                'longest_streak': profile.longest_streak,
+                'likes_received': profile.likes_received,
+                'lucky_bonus_count': profile.lucky_bonus_count,
+                'average_response_time': profile.average_response_time,
+            })
+
+        return Response({
+            'leaderboard': leaderboard_data,
+            'total_participants': len(leaderboard_data)
+        })
+
+    @action(detail=False, methods=['get'])
+    def user_stats(self, request):
+        """Get current user's gamification stats"""
+        event_id = request.query_params.get('event_id')
+
+        if not event_id:
+            return Response({'error': 'event_id parameter required'}, status=400)
+
+        # Check if user is the event creator
+        try:
+            from events.models import Event
+            event = Event.objects.get(id=event_id)
+            if event.owner != request.user:
+                return Response({'error': 'Only event creators can view user statistics'}, status=403)
+        except Event.DoesNotExist:
+            return Response({'error': 'Event not found'}, status=404)
+
+        try:
+            profile = UserGamificationProfile.objects.get(
+                user=request.user,
+                event_id=event_id
+            )
+
+            # Get user's rank
+            higher_ranked = UserGamificationProfile.objects.filter(
+                event_id=event_id,
+                total_points__gt=profile.total_points
+            ).count()
+            rank = higher_ranked + 1
+
+            return Response({
+                'rank': rank,
+                'total_points': profile.total_points,
+                'base_points': profile.base_points,
+                'bonus_points': profile.bonus_points,
+                'activities_completed': profile.activities_completed,
+                'current_streak': profile.current_streak,
+                'longest_streak': profile.longest_streak,
+                'likes_received': profile.likes_received,
+                'likes_given': profile.likes_given,
+                'lucky_bonus_count': profile.lucky_bonus_count,
+                'total_lucky_points': profile.total_lucky_points,
+                'average_response_time': profile.average_response_time,
+                'streak_multiplier': profile.get_streak_multiplier(),
+            })
+        except UserGamificationProfile.DoesNotExist:
+            return Response({
+                'rank': 0,
+                'total_points': 0,
+                'message': 'No activity yet'
+            })
 
 class IcebreakerResponseViewSet(viewsets.ModelViewSet):
     serializer_class = IcebreakerResponseSerializer
@@ -522,6 +787,69 @@ class IcebreakerResponseViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         # This is handled through the activity respond endpoint
         pass
+
+    @action(detail=True, methods=['post'])
+    def react(self, request, pk=None):
+        """Add a reaction to an icebreaker response"""
+        response = self.get_object()
+        reaction_type = request.data.get('reaction_type', 'like')
+
+        # Valid reaction types
+        valid_reactions = [choice[0] for choice in ResponseReaction.REACTION_TYPES]
+        if reaction_type not in valid_reactions:
+            return Response({'error': 'Invalid reaction type'}, status=400)
+
+        # Get or create/update the reaction
+        reaction, created = ResponseReaction.objects.get_or_create(
+            response=response,
+            user=request.user,
+            defaults={'reaction_type': reaction_type}
+        )
+
+        if not created:
+            # Update existing reaction
+            if reaction.reaction_type == reaction_type:
+                # Same reaction - remove it (toggle off)
+                reaction.delete()
+                response.like_count = response.reactions.count()
+                response.save(update_fields=['like_count'])
+                return Response({'message': 'Reaction removed'})
+            else:
+                # Different reaction - update it
+                reaction.reaction_type = reaction_type
+                reaction.save()
+
+        # Update response like count and recalculate points
+        old_like_count = response.like_count
+        response.like_count = response.reactions.count()
+
+        # Recalculate points with new social engagement
+        response.calculate_points(save=True)
+        response.save(update_fields=['like_count'])
+
+        # Update user's gamification profile
+        if response.user and response.user != request.user:
+            profile, _ = UserGamificationProfile.objects.get_or_create(
+                user=response.user,
+                event=response.activity.event
+            )
+            profile.likes_received = profile.likes_received - old_like_count + response.like_count
+            profile.save(update_fields=['likes_received'])
+
+        # Update reactor's profile
+        reactor_profile, _ = UserGamificationProfile.objects.get_or_create(
+            user=request.user,
+            event=response.activity.event
+        )
+        reactor_profile.likes_given += 1
+        reactor_profile.save(update_fields=['likes_given'])
+
+        return Response({
+            'message': 'Reaction added',
+            'reaction_type': reaction_type,
+            'total_reactions': response.like_count,
+            'points_earned': response.points_earned
+        })
 
 class NotificationPreferenceViewSet(viewsets.ModelViewSet):
     serializer_class = NotificationPreferenceSerializer

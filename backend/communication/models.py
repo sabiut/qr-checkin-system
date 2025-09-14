@@ -355,11 +355,18 @@ class IcebreakerActivity(models.Model):
 
     def get_guest_response_url(self, request=None):
         """Get the public URL for guest responses"""
+        from django.conf import settings
+
         if request:
             base_url = f"{request.scheme}://{request.get_host()}"
         else:
-            from django.conf import settings
-            base_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:5173')
+            # Use BASE_URL which is already configured in production as https://eventqr.app
+            base_url = getattr(settings, 'BASE_URL', 'http://localhost:8000')
+            # BASE_URL points to backend, but we need frontend URL for React routes
+            # In production, BASE_URL is set to https://eventqr.app which is correct
+            # In dev, we need to use localhost:5173 for frontend
+            if 'localhost:8000' in base_url or '127.0.0.1:8000' in base_url:
+                base_url = 'http://localhost:5173'
 
         return f"{base_url}/icebreaker/{self.guest_response_token}"
 
@@ -400,6 +407,16 @@ class IcebreakerResponse(models.Model):
     guest_name = models.CharField(max_length=100, null=True, blank=True, help_text="Name for guest responses")
     is_guest_response = models.BooleanField(default=False, help_text="Whether this is a guest response")
 
+    # Enhanced gamification fields
+    base_points = models.IntegerField(default=0, help_text="Base points for activity type")
+    speed_bonus = models.IntegerField(default=0, help_text="Bonus points for quick response")
+    quality_bonus = models.IntegerField(default=0, help_text="Bonus points for quality response")
+    social_bonus = models.IntegerField(default=0, help_text="Bonus points from likes/engagement")
+    streak_multiplier = models.FloatField(default=1.0, help_text="Streak bonus multiplier")
+    lucky_multiplier = models.FloatField(default=1.0, help_text="Random lucky bonus multiplier")
+    response_time_seconds = models.IntegerField(null=True, blank=True, help_text="Time taken to respond in seconds")
+    quality_score = models.FloatField(default=0.0, help_text="AI-generated quality score (0-10)")
+
     class Meta:
         ordering = ['-created_at']
 
@@ -416,6 +433,105 @@ class IcebreakerResponse(models.Model):
     @property
     def selected_option(self):
         return self.response_data.get('selected_option', '')
+
+    def calculate_points(self, save=True):
+        """Calculate total points with all bonuses and multipliers"""
+        import random
+        from datetime import timedelta
+
+        # Get or create gamification profile for both users and guests
+        if self.is_guest_response:
+            # Handle guest responses
+            profile, created = UserGamificationProfile.objects.get_or_create(
+                guest_email=self.guest_email,
+                event=self.activity.event,
+                defaults={
+                    'guest_name': self.guest_name,
+                }
+            )
+        else:
+            # Handle authenticated user responses
+            if not self.user:
+                self.points_earned = 0
+                if save:
+                    self.save(update_fields=['points_earned'])
+                return 0
+
+            profile, created = UserGamificationProfile.objects.get_or_create(
+                user=self.user,
+                event=self.activity.event
+            )
+
+        # 1. Base points from activity type
+        activity_type_points = {
+            'poll': 10,
+            'quiz': 25,
+            'question': 15,
+            'challenge': 15,
+            'introduction': 20,
+            'prediction': 12,
+            'skill_sharing': 18,
+            'goal_setting': 16,
+            'fun_fact': 14,
+            'networking_challenge': 20,
+        }
+        self.base_points = activity_type_points.get(self.activity.activity_type, 10)
+
+        # 2. Speed bonus (within 10 minutes of activity start)
+        self.speed_bonus = 0
+        if self.response_time_seconds and self.response_time_seconds <= 600:  # 10 minutes
+            self.speed_bonus = 5
+
+        # 3. Quality bonus (based on response length/detail for text responses)
+        self.quality_bonus = 0
+        if self.activity.activity_type in ['question', 'challenge', 'introduction']:
+            text = self.text_response.strip()
+            if len(text) > 100:  # Detailed response
+                self.quality_bonus = 5
+            elif len(text) > 50:  # Moderate response
+                self.quality_bonus = 3
+
+        # 4. Social bonus (based on engagement this response already has)
+        self.social_bonus = min(self.like_count * 2, 20)  # Max 20 bonus points from likes
+
+        # 5. Streak multiplier
+        self.streak_multiplier = profile.get_streak_multiplier()
+
+        # 6. Lucky multiplier (10% chance of 2x-5x)
+        self.lucky_multiplier = 1.0
+        if random.random() < 0.1:  # 10% chance
+            self.lucky_multiplier = random.uniform(2.0, 5.0)
+            profile.lucky_bonus_count += 1
+
+        # Calculate total points
+        subtotal = self.base_points + self.speed_bonus + self.quality_bonus + self.social_bonus
+        total_with_streak = subtotal * self.streak_multiplier
+        final_total = total_with_streak * self.lucky_multiplier
+
+        self.points_earned = int(final_total)
+
+        # Update user profile
+        if created or profile.activities_completed == 0:
+            # First activity
+            profile.update_streak()
+
+        profile.total_points += self.points_earned
+        profile.base_points += self.base_points
+        profile.bonus_points += (self.points_earned - self.base_points)
+        profile.activities_completed += 1
+
+        if self.lucky_multiplier > 1.0:
+            profile.total_lucky_points += int(final_total - total_with_streak)
+
+        profile.save()
+
+        if save:
+            self.save(update_fields=[
+                'points_earned', 'base_points', 'speed_bonus', 'quality_bonus',
+                'social_bonus', 'streak_multiplier', 'lucky_multiplier'
+            ])
+
+        return self.points_earned
 
 
 class IcebreakerResponseLike(models.Model):
@@ -447,3 +563,187 @@ class IcebreakerResponseReply(models.Model):
 
     def __str__(self):
         return f"Reply by {self.user.username} on {self.response.activity.title}"
+
+
+class UserGamificationProfile(models.Model):
+    """Track user's gamification data and achievements for icebreakers"""
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='icebreaker_profile', null=True, blank=True)
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='user_profiles')
+
+    # Guest identification fields
+    guest_email = models.EmailField(null=True, blank=True, help_text="Email for guest users")
+    guest_name = models.CharField(max_length=200, null=True, blank=True, help_text="Name for guest users")
+
+    # Points tracking
+    total_points = models.IntegerField(default=0)
+    base_points = models.IntegerField(default=0)
+    bonus_points = models.IntegerField(default=0)
+
+    # Streak tracking
+    current_streak = models.IntegerField(default=0)
+    longest_streak = models.IntegerField(default=0)
+    last_activity_date = models.DateField(null=True, blank=True)
+
+    # Speed stats
+    average_response_time = models.FloatField(default=0.0, help_text="Average response time in seconds")
+    fastest_response_time = models.IntegerField(null=True, blank=True, help_text="Fastest response in seconds")
+
+    # Engagement stats
+    activities_completed = models.IntegerField(default=0)
+    likes_received = models.IntegerField(default=0)
+    likes_given = models.IntegerField(default=0)
+    replies_received = models.IntegerField(default=0)
+    replies_given = models.IntegerField(default=0)
+
+    # Lucky multiplier tracking
+    lucky_bonus_count = models.IntegerField(default=0)
+    total_lucky_points = models.IntegerField(default=0)
+
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        # Ensure unique profiles for authenticated users and guests
+        constraints = [
+            models.UniqueConstraint(
+                fields=['user', 'event'],
+                condition=models.Q(user__isnull=False),
+                name='unique_user_event'
+            ),
+            models.UniqueConstraint(
+                fields=['guest_email', 'event'],
+                condition=models.Q(guest_email__isnull=False),
+                name='unique_guest_email_event'
+            ),
+        ]
+        ordering = ['-total_points']
+
+    def __str__(self):
+        if self.user:
+            return f"{self.user.username} - {self.event.name} ({self.total_points} pts)"
+        else:
+            name = self.guest_name or self.guest_email or "Guest"
+            return f"{name} (guest) - {self.event.name} ({self.total_points} pts)"
+
+    def update_streak(self, activity_date=None):
+        """Update user's streak based on activity participation"""
+        from datetime import date, timedelta
+
+        activity_date = activity_date or date.today()
+
+        if not self.last_activity_date:
+            # First activity
+            self.current_streak = 1
+            self.longest_streak = 1
+        elif self.last_activity_date == activity_date:
+            # Same day, no change to streak
+            return
+        elif self.last_activity_date == activity_date - timedelta(days=1):
+            # Consecutive day
+            self.current_streak += 1
+            self.longest_streak = max(self.longest_streak, self.current_streak)
+        else:
+            # Streak broken
+            self.current_streak = 1
+
+        self.last_activity_date = activity_date
+        self.save(update_fields=['current_streak', 'longest_streak', 'last_activity_date'])
+
+    def get_streak_multiplier(self):
+        """Calculate streak multiplier based on current streak"""
+        if self.current_streak >= 7:
+            return 2.0  # Double points for 7+ day streak
+        elif self.current_streak >= 5:
+            return 1.8  # 80% bonus for 5-6 day streak
+        elif self.current_streak >= 3:
+            return 1.5  # 50% bonus for 3-4 day streak
+        else:
+            return 1.0  # No bonus
+
+
+class IcebreakerAchievement(models.Model):
+    """Define icebreaker achievements users can unlock"""
+
+    ACHIEVEMENT_TYPES = [
+        ('streak', 'Streak Achievement'),
+        ('speed', 'Speed Achievement'),
+        ('social', 'Social Achievement'),
+        ('participation', 'Participation Achievement'),
+        ('quality', 'Quality Achievement'),
+        ('lucky', 'Lucky Achievement'),
+    ]
+
+    ACHIEVEMENT_TIERS = [
+        ('bronze', 'Bronze'),
+        ('silver', 'Silver'),
+        ('gold', 'Gold'),
+        ('platinum', 'Platinum'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=100)
+    description = models.TextField()
+    achievement_type = models.CharField(max_length=20, choices=ACHIEVEMENT_TYPES)
+    tier = models.CharField(max_length=20, choices=ACHIEVEMENT_TIERS, default='bronze')
+
+    # Requirements
+    required_value = models.IntegerField(help_text="Value needed to unlock (streak days, speed seconds, etc.)")
+    points_reward = models.IntegerField(default=0, help_text="Bonus points for unlocking")
+
+    # Display
+    icon = models.CharField(max_length=10, default='🏆', help_text="Emoji icon for achievement")
+    is_hidden = models.BooleanField(default=False, help_text="Hidden until unlocked")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ['achievement_type', 'tier', 'required_value']
+        ordering = ['achievement_type', 'required_value']
+
+    def __str__(self):
+        return f"{self.icon} {self.name} ({self.tier})"
+
+
+class UserIcebreakerAchievement(models.Model):
+    """Track which icebreaker achievements users have unlocked"""
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='icebreaker_achievements')
+    achievement = models.ForeignKey(IcebreakerAchievement, on_delete=models.CASCADE)
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='user_achievements')
+
+    # Unlock details
+    unlocked_at = models.DateTimeField(auto_now_add=True)
+    trigger_value = models.IntegerField(help_text="Value that triggered the unlock")
+
+    class Meta:
+        unique_together = ['user', 'achievement', 'event']
+        ordering = ['-unlocked_at']
+
+    def __str__(self):
+        return f"{self.user.username} unlocked {self.achievement.name}"
+
+
+class ResponseReaction(models.Model):
+    """Enhanced reactions beyond just likes"""
+
+    REACTION_TYPES = [
+        ('like', '👍'),
+        ('love', '❤️'),
+        ('laugh', '😂'),
+        ('wow', '😲'),
+        ('think', '🤔'),
+        ('fire', '🔥'),
+    ]
+
+    response = models.ForeignKey(IcebreakerResponse, on_delete=models.CASCADE, related_name='reactions')
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    reaction_type = models.CharField(max_length=10, choices=REACTION_TYPES, default='like')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ['response', 'user']
+
+    def __str__(self):
+        return f"{self.user.username} reacted {self.get_reaction_type_display()} to {self.response.activity.title}"

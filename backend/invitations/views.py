@@ -308,31 +308,46 @@ class InvitationViewSet(viewsets.ModelViewSet):
         .feature-list {
             display: flex;
             flex-direction: column;
-            gap: 12px;
-            margin-top: 20px;
+            gap: 16px;
+            margin-top: 25px;
+            padding: 20px;
+            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+            border-radius: 16px;
+            border: 1px solid #e2e8f0;
         }
         
         .feature-item {
             display: flex;
             align-items: center;
-            gap: 12px;
-            padding: 12px;
+            gap: 15px;
+            padding: 18px 20px;
             background: white;
-            border-radius: 10px;
-            color: #4a5568;
-            font-size: 14px;
+            border-radius: 12px;
+            color: #2d3748;
+            font-size: 16px;
+            font-weight: 500;
+            border: 2px solid #e2e8f0;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
             transition: all 0.3s ease;
         }
         
         .feature-item:hover {
-            background: #f7fafc;
-            transform: translateX(5px);
+            background: #f8fafc;
+            border-color: #cbd5e0;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.12);
+            transform: translateX(5px) translateY(-2px);
         }
         
         .feature-icon {
-            font-size: 20px;
-            width: 30px;
-            text-align: center;
+            font-size: 24px;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
+            border-radius: 10px;
+            border: 1px solid #e2e8f0;
         }
         
         .progress-container {
@@ -409,7 +424,7 @@ class InvitationViewSet(viewsets.ModelViewSet):
             # User doesn't have an account - encourage registration
             html_parts.extend([
                 '<div class="gamification-header-wrapper">',
-                '<div class="gamification-header">game Unlock Event Rewards</div>',
+                '<div class="gamification-header">🎮 Unlock Event Rewards</div>',
                 '<div class="gamification-subtitle">Join our exclusive rewards program</div>',
                 '</div>',
                 '<div class="gamification-content">',
@@ -422,19 +437,19 @@ class InvitationViewSet(viewsets.ModelViewSet):
                 '</div>',
                 '<div class="feature-list">',
                 '<div class="feature-item">',
-                '<span class="feature-icon">trophy</span>',
+                '<span class="feature-icon">🏆</span>',
                 '<span>Earn exclusive badges for achievements</span>',
                 '</div>',
                 '<div class="feature-item">',
-                '<span class="feature-icon">chart</span>',
+                '<span class="feature-icon">📊</span>',
                 '<span>Track your progress on live leaderboards</span>',
                 '</div>',
                 '<div class="feature-item">',
-                '<span class="feature-icon">fire</span>',
+                '<span class="feature-icon">🔥</span>',
                 '<span>Build attendance streaks for bonus rewards</span>',
                 '</div>',
                 '<div class="feature-item">',
-                '<span class="feature-icon">target</span>',
+                '<span class="feature-icon">🎯</span>',
                 '<span>Complete challenges and unlock special perks</span>',
                 '</div>',
                 '</div>',
@@ -444,7 +459,7 @@ class InvitationViewSet(viewsets.ModelViewSet):
             # User has account but not logged in
             html_parts.extend([
                 '<div class="gamification-header-wrapper">',
-                '<div class="gamification-header">lock Welcome Back!</div>',
+                '<div class="gamification-header">🔒 Welcome Back!</div>',
                 '<div class="gamification-subtitle">Login to view your rewards</div>',
                 '</div>',
                 '<div class="gamification-content">',
@@ -464,7 +479,7 @@ class InvitationViewSet(viewsets.ModelViewSet):
             
             html_parts.extend([
                 '<div class="gamification-header-wrapper">',
-                '<div class="gamification-header">game Your Event Dashboard</div>',
+                '<div class="gamification-header">🎮 Your Event Dashboard</div>',
                 '<div class="gamification-subtitle">Track your achievements and progress</div>',
                 '</div>',
                 '<div class="gamification-content">',
