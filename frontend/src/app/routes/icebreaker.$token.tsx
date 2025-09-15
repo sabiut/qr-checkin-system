@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { AlertCircle, CheckCircle, Clock, MapPin, User, Mail, Heart } from 'lucide-react';
+import { AlertCircle, CheckCircle, Clock, MapPin, User, Heart } from 'lucide-react';
 
 interface ActivityData {
   question?: string;
@@ -46,7 +46,6 @@ export default function GuestIcebreakerResponse() {
 
   // Form state
   const [guestName, setGuestName] = useState('');
-  const [guestEmail, setGuestEmail] = useState('');
   const [response, setResponse] = useState<string | string[]>('');
 
   // Fetch activity data
@@ -77,7 +76,7 @@ export default function GuestIcebreakerResponse() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!activity || !guestEmail.trim()) {
+    if (!activity || !guestName.trim()) {
       setError('Please fill in all required fields');
       return;
     }
@@ -88,7 +87,6 @@ export default function GuestIcebreakerResponse() {
     try {
       const responseData = {
         token,
-        guest_email: guestEmail.trim(),
         guest_name: guestName.trim(),
         response_data: formatResponseData()
       };
@@ -337,36 +335,20 @@ export default function GuestIcebreakerResponse() {
 
             <form onSubmit={handleSubmit} className="space-y-6">
               {/* Guest info */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label htmlFor="email" className="flex items-center text-sm font-medium text-gray-700 mb-2">
-                    <Mail className="h-4 w-4 mr-1" />
-                    Email Address *
-                  </label>
-                  <input
-                    id="email"
-                    type="email"
-                    value={guestEmail}
-                    onChange={(e) => setGuestEmail(e.target.value)}
-                    placeholder="your@email.com"
-                    required
-                    className="w-full px-4 py-2 text-gray-900 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-gray-600"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="name" className="flex items-center text-sm font-medium text-gray-700 mb-2">
-                    <User className="h-4 w-4 mr-1" />
-                    Your Name
-                  </label>
-                  <input
-                    id="name"
-                    type="text"
-                    value={guestName}
-                    onChange={(e) => setGuestName(e.target.value)}
-                    placeholder="Your name (optional)"
-                    className="w-full px-4 py-2 text-gray-900 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-gray-600"
-                  />
-                </div>
+              <div>
+                <label htmlFor="name" className="flex items-center text-sm font-medium text-gray-700 mb-2">
+                  <User className="h-4 w-4 mr-1" />
+                  Your Name *
+                </label>
+                <input
+                  id="name"
+                  type="text"
+                  value={guestName}
+                  onChange={(e) => setGuestName(e.target.value)}
+                  placeholder="Enter your name"
+                  required
+                  className="w-full px-4 py-2 text-gray-900 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-gray-600"
+                />
               </div>
 
               {/* Response form */}
@@ -384,7 +366,7 @@ export default function GuestIcebreakerResponse() {
               {/* Submit button */}
               <button
                 type="submit"
-                disabled={submitting || !guestEmail.trim() || !response}
+                disabled={submitting || !guestName.trim() || !response}
                 className="w-full py-3 px-4 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
               >
                 {submitting ? (
