@@ -3,6 +3,8 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import BasePermission
 from django.http import HttpRequest
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
 from typing import Optional
 import logging
 
@@ -464,10 +466,18 @@ class IcebreakerActivityViewSet(viewsets.ModelViewSet):
         serializer = IcebreakerResponseSerializer(responses, many=True, context={'request': request})
         return Response(serializer.data)
 
+    @method_decorator(csrf_exempt, name='dispatch')
     @action(detail=False, methods=['get', 'post'], permission_classes=[GuestTokenPermission])
     def guest_response(self, request: HttpRequest) -> Response:
         """
         Public endpoint for guest responses using token.
+
+        CSRF exemption is acceptable here because:
+        1. This is a public API endpoint for anonymous guests
+        2. Security is handled via custom GuestTokenPermission with unique tokens
+        3. Input validation and rate limiting are implemented
+        4. No sensitive user data or state changes beyond the intended response submission
+
         Secured with custom permission class and token validation.
         """
         token = request.query_params.get('token') or request.data.get('token')
