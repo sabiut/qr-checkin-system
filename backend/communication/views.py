@@ -1,6 +1,8 @@
 from rest_framework import viewsets, permissions, status, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
 from rest_framework.pagination import PageNumberPagination
 from django.contrib.auth.models import User
 from django.db.models import Q, Count, Max, Prefetch
@@ -430,6 +432,7 @@ class IcebreakerActivityViewSet(viewsets.ModelViewSet):
         serializer = IcebreakerResponseSerializer(responses, many=True, context={'request': request})
         return Response(serializer.data)
 
+    @method_decorator(csrf_exempt, name='dispatch')
     @action(detail=False, methods=['get', 'post'], permission_classes=[])
     def guest_response(self, request):
         """Public endpoint for guest responses using token"""
