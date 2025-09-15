@@ -1,8 +1,40 @@
 from rest_framework import viewsets, permissions, status, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from django.views.decorators.csrf import csrf_exempt
-from django.utils.decorators import method_decorator
+from rest_framework.permissions import BasePermission
+from django.http import HttpRequest
+from typing import Optional
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+class GuestTokenPermission(BasePermission):
+    """
+    Custom permission class for guest token validation.
+    Validates the guest response token without requiring authentication.
+    """
+
+    def has_permission(self, request: HttpRequest, view) -> bool:
+        if request.method == 'GET':
+            return True  # Allow GET requests to view activity details
+
+        # For POST requests, validate the token exists and is valid
+        token = request.query_params.get('token') or request.data.get('token')
+        if not token:
+            logger.warning(f"Guest response attempt without token from IP: {request.META.get('REMOTE_ADDR')}")
+            return False
+
+        try:
+            # Check if token corresponds to an active activity
+            from .models import IcebreakerActivity
+            activity = IcebreakerActivity.objects.get(guest_response_token=token, is_active=True)
+            # Store activity in request for later use to avoid duplicate queries
+            request._guest_activity = activity
+            return True
+        except IcebreakerActivity.DoesNotExist:
+            logger.warning(f"Invalid guest token attempted from IP: {request.META.get('REMOTE_ADDR')}")
+            return False
 from rest_framework.pagination import PageNumberPagination
 from django.contrib.auth.models import User
 from django.db.models import Q, Count, Max, Prefetch
@@ -432,19 +464,26 @@ class IcebreakerActivityViewSet(viewsets.ModelViewSet):
         serializer = IcebreakerResponseSerializer(responses, many=True, context={'request': request})
         return Response(serializer.data)
 
-    @method_decorator(csrf_exempt, name='dispatch')
-    @action(detail=False, methods=['get', 'post'], permission_classes=[])
-    def guest_response(self, request):
-        """Public endpoint for guest responses using token"""
+    @action(detail=False, methods=['get', 'post'], permission_classes=[GuestTokenPermission])
+    def guest_response(self, request: HttpRequest) -> Response:
+        """
+        Public endpoint for guest responses using token.
+        Secured with custom permission class and token validation.
+        """
         token = request.query_params.get('token') or request.data.get('token')
 
         if not token:
+            logger.warning(f"Guest response attempt without token from IP: {request.META.get('REMOTE_ADDR')}")
             return Response({'error': 'Token required'}, status=400)
 
-        try:
-            activity = IcebreakerActivity.objects.get(guest_response_token=token, is_active=True)
-        except IcebreakerActivity.DoesNotExist:
-            return Response({'error': 'Invalid or expired token'}, status=404)
+        # Use cached activity from permission class to avoid duplicate queries
+        activity = getattr(request, '_guest_activity', None)
+        if not activity:
+            try:
+                activity = IcebreakerActivity.objects.get(guest_response_token=token, is_active=True)
+            except IcebreakerActivity.DoesNotExist:
+                logger.warning(f"Invalid guest token {token[:8]}... from IP: {request.META.get('REMOTE_ADDR')}")
+                return Response({'error': 'Invalid or expired token'}, status=404)
 
         if request.method == 'GET':
             # Return activity details for guest response page
@@ -452,13 +491,21 @@ class IcebreakerActivityViewSet(viewsets.ModelViewSet):
             return Response(serializer.data)
 
         elif request.method == 'POST':
-            # Handle guest response submission
-            guest_email = request.data.get('guest_email')
-            guest_name = request.data.get('guest_name', '')
+            # Handle guest response submission with validation
+            guest_email = request.data.get('guest_email', '').strip()
+            guest_name = request.data.get('guest_name', '').strip()
             response_data = request.data.get('response_data', {})
 
+            # Validate required fields
             if not guest_name:
+                logger.info(f"Guest response missing name for activity {activity.id}")
                 return Response({'error': 'Guest name required'}, status=400)
+
+            if len(guest_name) > 100:  # Reasonable limit
+                return Response({'error': 'Guest name too long (max 100 characters)'}, status=400)
+
+            if not response_data:
+                return Response({'error': 'Response data required'}, status=400)
 
             # Check if guest already responded (unless multiple responses allowed)
             if not activity.allow_multiple_responses:
@@ -495,6 +542,7 @@ class IcebreakerActivityViewSet(viewsets.ModelViewSet):
             activity.response_count = activity.responses.count()
             activity.save(update_fields=['response_count'])
 
+            logger.info(f"Guest response submitted successfully for activity {activity.id} by {guest_name}")
             serializer = IcebreakerResponseSerializer(response, context={'request': request})
             return Response(serializer.data, status=status.HTTP_201_CREATED)
 
