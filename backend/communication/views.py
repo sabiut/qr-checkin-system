@@ -454,14 +454,14 @@ class IcebreakerActivityViewSet(viewsets.ModelViewSet):
             guest_name = request.data.get('guest_name', '')
             response_data = request.data.get('response_data', {})
 
-            if not guest_email:
-                return Response({'error': 'Guest email required'}, status=400)
+            if not guest_name:
+                return Response({'error': 'Guest name required'}, status=400)
 
             # Check if guest already responded (unless multiple responses allowed)
             if not activity.allow_multiple_responses:
                 existing_response = IcebreakerResponse.objects.filter(
                     activity=activity,
-                    guest_email=guest_email,
+                    guest_name=guest_name,
                     is_guest_response=True
                 ).first()
                 if existing_response:
@@ -478,7 +478,7 @@ class IcebreakerActivityViewSet(viewsets.ModelViewSet):
             # Create guest response
             response = IcebreakerResponse.objects.create(
                 activity=activity,
-                guest_email=guest_email,
+                guest_email=guest_email or '',
                 guest_name=guest_name,
                 response_data=response_data,
                 is_guest_response=True,
